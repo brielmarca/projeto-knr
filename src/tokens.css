@@ -1,0 +1,31 @@
+:root {
+  color-scheme: dark;
+  --bg-primary: #080808;
+  --bg-secondary: #0e0e0e;
+  --surface: #141414;
+  --surface-hover: #1a1a1a;
+  --border-subtle: #222222;
+  --border-strong: #2d2d2d;
+  --text-primary: #f5f5f5;
+  --text-secondary: #a3a3a3;
+  --text-muted: #8a8a8a;
+  --brand-red: #e53935;
+  --brand-red-hover: #f04444;
+  --button-red: #c92b28;
+  --button-red-hover: #d52e2b;
+  --status-green: #22c55e;
+  --status-green-dark: #16a34a;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --radius: 4px;
+  --radius-card: 6px;
+  --radius-pill: 9999px;
+  --duration: 150ms;
+}

@@ -18,7 +18,22 @@ npm run build
 npm run preview
 ```
 
-The production build uses disconnected/unknown telemetry. There is no Windows engine or native desktop packaging in this repository. Analysis reports the missing integration; applying changes is disabled. No scans, restore points, service changes, or optimizations are simulated as real operations.
+The production build uses disconnected/unknown telemetry. There is no Windows engine in this repository. Analysis reports the missing integration; applying changes is disabled. No scans, restore points, service changes, or optimizations are simulated as real operations.
+
+## Windows desktop shell
+
+The existing Vite frontend is also packaged as a Tauri 2 desktop application. It remains a frontend-only shell: the Agent, PowerShell, hardware collection, backend, PostgreSQL, and optimization engine are not bundled or invoked.
+
+```sh
+npm run desktop:dev
+npm run desktop:build
+```
+
+`desktop:dev` starts Vite and opens the app in a native desktop window. It requires Rust and the platform-specific Tauri development prerequisites. `desktop:build` creates an NSIS installer on Windows; Windows artifacts are also produced by `.github/workflows/windows-desktop-build.yml`.
+
+The API base URL can be supplied at Vite compile time as `VITE_API_URL`. See `.env.example`. The current snapshot has no API client, so the variable is reserved for the backend integration and does not replace the current unavailable behavior. Set it in the build environment when that integration is present; it is not hardcoded into Tauri. The desktop content security policy permits HTTP(S) API connections but no Tauri system capability.
+
+The package icon is a temporary reuse of the existing KRZ bolt mark. Final production icon artwork remains pending.
 
 ## Structure
 

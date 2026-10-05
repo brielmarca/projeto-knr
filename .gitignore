@@ -2,3 +2,29 @@ node_modules/
 dist/
 test-results/
 playwright-report/
+src-tauri/target/
+src-tauri/gen/
+src-tauri/icons/*
+!src-tauri/icons/32x32.png
+!src-tauri/icons/128x128.png
+!src-tauri/icons/icon.ico
+!src-tauri/icons/icon.svg
+
+# Local environment and secrets; keep documented templates versioned.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Local runtime data and logs.
+*.db
+*.sqlite
+*.sqlite3
+*.log
+
+# Empty lockfiles left by npm in directories that contain no packages.
+/backend/package-lock.json
+/contracts/package-lock.json

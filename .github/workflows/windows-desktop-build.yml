@@ -1,0 +1,55 @@
+name: Windows desktop build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows-desktop:
+    name: Build Windows x64 desktop app
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      VITE_API_URL: ${{ vars.VITE_API_URL }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Verify existing frontend
+        run: npm run check
+
+      - name: Build NSIS installer
+        run: npm run desktop:build
+
+      - name: Upload Windows installer and executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: krz-boost-windows-x64
+          if-no-files-found: error
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/krz-boost.exe

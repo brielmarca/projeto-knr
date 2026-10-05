@@ -1,4 +1,4 @@
-# KRZ Boost frontend
+# KZN Boost frontend
 
 Polished implementation of the approved `screen.png` Stitch design. Vanilla JavaScript ES modules and locally compiled Tailwind 3; Vite is build tooling, not an application framework. JavaScript is checked with TypeScript strict mode through JSDoc.
 

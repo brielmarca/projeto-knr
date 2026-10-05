@@ -48,9 +48,9 @@ Everything is designed around one rule: **missing data stays missing**. Without 
 
 The live app renders the same layout with honest data states:
 
-| Run mode | What you see |
-| --- | --- |
-| `npm run dev` (development) | Fixtures from the Stitch design, always labeled **"Development preview · Mock data"** |
+| Run mode                             | What you see                                                                                           |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| `npm run dev` (development)          | Fixtures from the Stitch design, always labeled **"Development preview · Mock data"**                  |
 | `npm run preview` (production build) | Disconnected/unknown values — "Windows telemetry · Not connected", "Analysis required", "Not verified" |
 
 `npm run test:e2e` writes full-page screenshots at 1440×900, 1920×1080, 1366×768 and 1280×720 to `test-results/` (git-ignored, regenerated per run).
@@ -91,16 +91,16 @@ The live app renders the same layout with honest data states:
 
 ## Technology stack
 
-| Category | Choices |
-| --- | --- |
-| **Language** | Vanilla JavaScript ES modules — no UI framework; Vite is build tooling only |
-| **Types** | TypeScript 5.9 in strict mode via JSDoc annotations (`tsc --noEmit`, `checkJs`) |
-| **Styling** | Tailwind CSS 3 compiled locally through PostCSS + Autoprefixer, custom tokens in `src/tokens.css`, Inter via `@fontsource/inter` |
-| **Build** | Vite 7 (two HTML entries: `index.html`, `code.html`) |
-| **Desktop** | Tauri 2 (Rust ≥ 1.77.2), NSIS bundling, `src-tauri/` |
-| **Testing** | Playwright + `@axe-core/playwright` browser tests, `node --test` unit tests |
-| **Lint / format** | ESLint 9 (flat config), Prettier 3 |
-| **CI** | GitHub Actions on `windows-latest` (`.github/workflows/windows-desktop-build.yml`) |
+| Category          | Choices                                                                                                                          |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| **Language**      | Vanilla JavaScript ES modules — no UI framework; Vite is build tooling only                                                      |
+| **Types**         | TypeScript 5.9 in strict mode via JSDoc annotations (`tsc --noEmit`, `checkJs`)                                                  |
+| **Styling**       | Tailwind CSS 3 compiled locally through PostCSS + Autoprefixer, custom tokens in `src/tokens.css`, Inter via `@fontsource/inter` |
+| **Build**         | Vite 7 (two HTML entries: `index.html`, `code.html`)                                                                             |
+| **Desktop**       | Tauri 2 (Rust ≥ 1.77.2), NSIS bundling, `src-tauri/`                                                                             |
+| **Testing**       | Playwright + `@axe-core/playwright` browser tests, `node --test` unit tests                                                      |
+| **Lint / format** | ESLint 9 (flat config), Prettier 3                                                                                               |
+| **CI**            | GitHub Actions on `windows-latest` (`.github/workflows/windows-desktop-build.yml`)                                               |
 
 ---
 
@@ -193,14 +193,14 @@ A web build or Linux check does not prove Windows installer or native behavior �
 
 ## Project status
 
-| Area | State |
-| --- | --- |
-| Dashboard UI vs. approved design | Implemented and browser-tested |
-| Honest disconnected/mock data behavior | Implemented and asserted by tests |
-| Accessibility (automated axe, keyboard, reduced motion) | Implemented; manual Windows testing still pending |
-| Web packaging (Vite production build) | Working |
-| Windows desktop shell (Tauri 2 + NSIS) | Working shell; CI workflow in place |
-| Windows Agent / telemetry / backend / database / optimization engine | **Not started** — placeholders only |
+| Area                                                                 | State                                             |
+| -------------------------------------------------------------------- | ------------------------------------------------- |
+| Dashboard UI vs. approved design                                     | Implemented and browser-tested                    |
+| Honest disconnected/mock data behavior                               | Implemented and asserted by tests                 |
+| Accessibility (automated axe, keyboard, reduced motion)              | Implemented; manual Windows testing still pending |
+| Web packaging (Vite production build)                                | Working                                           |
+| Windows desktop shell (Tauri 2 + NSIS)                               | Working shell; CI workflow in place               |
+| Windows Agent / telemetry / backend / database / optimization engine | **Not started** — placeholders only               |
 
 The product is a truthful, accessible UI foundation. It deliberately refuses to simulate scans, findings, performance gains, restore points, or optimizations as real operations.
 

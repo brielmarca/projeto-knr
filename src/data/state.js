@@ -1,5 +1,6 @@
 /** @typedef {{label: string, name: string, value: string, detail: string, percent: number | null}} HardwareMetric */
-/** @typedef {{source: 'unavailable' | 'mock', hardware: HardwareMetric[], impacts: string[], audit: string, findings: string, restore: string, results: string[]}} DashboardState */
+/** @typedef {{status: 'loading' | 'ready' | 'unavailable' | 'error', message: string, collectedAt?: string}} MemoryTelemetry */
+/** @typedef {{source: 'unavailable' | 'mock' | 'native', memoryTelemetry?: MemoryTelemetry, hardware: HardwareMetric[], impacts: string[], audit: string, findings: string, restore: string, results: string[]}} DashboardState */
 
 /** No inferred health, measurements, or restore guarantees without telemetry. @returns {DashboardState} */
 export function unavailableState() {
@@ -23,4 +24,52 @@ export function unavailableState() {
       "Analysis required",
     ],
   };
+}
+
+/** Start from disconnected state so memory can never imply other measurements.
+ * @param {import('@krz/contracts').SystemSnapshotV1} snapshot Validated IPC data.
+ * @returns {DashboardState}
+ */
+export function memorySnapshotState(snapshot) {
+  const state = unavailableState();
+  const memory = snapshot.memory;
+  state.memoryTelemetry = {
+    status: memory === null ? "unavailable" : "ready",
+    message:
+      memory === null
+        ? "The native snapshot contains no memory measurement."
+        : "Physical memory snapshot collected once at startup; not live monitoring.",
+    collectedAt: snapshot.collectedAt,
+  };
+  if (memory === null) return state;
+  state.source = "native";
+  state.hardware = state.hardware.map((metric) =>
+    metric.label === "Memory"
+      ? {
+          label: "Memory",
+          name: "Physical memory",
+          value: `${Number(memory.usagePercent.toFixed(1))}%`,
+          detail: `${(memory.usedBytes / 1024 ** 3).toFixed(1)} / ${(memory.totalBytes / 1024 ** 3).toFixed(1)} GiB`,
+          percent: memory.usagePercent,
+        }
+      : metric,
+  );
+  return state;
+}
+
+/** @param {DashboardState} state */
+export function telemetryLabel(state) {
+  if (state.source === "mock") return "Development preview · Mock data";
+  if (!state.memoryTelemetry) return "Windows telemetry · Not connected";
+  return {
+    loading: "Memory snapshot · Loading",
+    ready: "Native snapshot · Memory only",
+    unavailable: "Memory snapshot · Unavailable",
+    error: "Memory snapshot · Error",
+  }[state.memoryTelemetry.status];
+}
+
+/** @param {DashboardState} state */
+export function connectionLabel(state) {
+  return state.source === "native" ? "Memory only" : "Not connected";
 }

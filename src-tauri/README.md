@@ -7,7 +7,16 @@ The desktop shell exposes one argument-free, read-only command:
 The command runs `krz_telemetry::collect_system_snapshot` from `../native` on
 Tauri's blocking worker pool. Success resolves directly to the v1 shape defined
 in `contracts/system-snapshot.ts`: `schemaVersion`, `collectedAt`, and `memory`.
-The frontend does not invoke the command yet.
+The frontend invokes it once at startup inside Tauri, validates it with the shared
+schema, and displays only physical memory. Browser production stays disconnected;
+browser development retains labeled mock data. Native failures never use fixtures.
+
+The dashboard shows used/total GiB and usage percentage, with the collection
+timestamp in the system connection dialog. It is a point-in-time snapshot, not live
+monitoring. A five-second UI timeout leaves memory unavailable; a late response is
+ignored. Reloading requests a new snapshot. Diagnostics and optimizations remain
+unavailable. Frontend transport tests use a stub; they do not validate WebView2 or
+Windows memory collection.
 
 Failures reject with a structured JSON object:
 

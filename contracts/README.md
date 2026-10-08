@@ -1,8 +1,10 @@
 # System snapshot v1
 
 `system-snapshot.ts` defines the transport-independent memory snapshot shared
-with the Rust collector in `native/`. This standalone package is not imported
-by the frontend.
+with the Rust collector in `native/`. The frontend imports this local package
+to validate IPC responses. Root `npm ci` builds its runtime JavaScript and types
+through the `prepare` script; after editing the schema, rebuild with
+`npm run build --prefix contracts`.
 
 - `schemaVersion`: exactly `1`.
 - `collectedAt`: an ISO 8601 UTC timestamp.

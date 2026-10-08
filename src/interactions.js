@@ -1,5 +1,6 @@
 import { modules } from "./components/modules.js";
 import { escapeHtml as e, badge } from "./ui.js";
+import { telemetryLabel } from "./data/state.js";
 
 /** @param {import('./data/state.js').DashboardState} state */
 export function bindInteractions(state) {
@@ -136,7 +137,9 @@ export function bindInteractions(state) {
     if (name === "system")
       openDialog(
         "System connection",
-        "<p>Windows telemetry is not connected. Hardware health, protection, and restore status cannot be verified.</p>" +
+        (state.memoryTelemetry
+          ? `<p>${e(state.memoryTelemetry.message)}</p>${state.memoryTelemetry.collectedAt ? `<p>Collected at <time datetime="${e(state.memoryTelemetry.collectedAt)}">${e(state.memoryTelemetry.collectedAt)}</time></p>` : ""}<p>Only physical memory is supported. Hardware health, diagnostics, protection, and restore status cannot be verified.</p>`
+          : "<p>Windows telemetry is not connected. Hardware health, protection, and restore status cannot be verified.</p>") +
           (mock
             ? '<p class="dialog-note">The dashboard currently displays labeled development fixtures from the Stitch design.</p>'
             : ""),
@@ -154,7 +157,7 @@ export function bindInteractions(state) {
     if (name === "settings") {
       openDialog(
         "Settings",
-        `<p>Default optimization mode for this session</p><div class="mode-switch" role="group" aria-label="Default optimization mode"><button data-setting="smart" aria-pressed="${mode === "smart"}">Smart Mode</button><button data-setting="advanced" aria-pressed="${mode === "advanced"}">Advanced</button></div><p class="dialog-note">${mock ? "Development preview uses sample data." : "Telemetry source: not connected."} Preferences are kept for this session only.</p>`,
+        `<p>Default optimization mode for this session</p><div class="mode-switch" role="group" aria-label="Default optimization mode"><button data-setting="smart" aria-pressed="${mode === "smart"}">Smart Mode</button><button data-setting="advanced" aria-pressed="${mode === "advanced"}">Advanced</button></div><p class="dialog-note">${mock ? "Development preview uses sample data." : e(telemetryLabel(state)) + "."} Preferences are kept for this session only.</p>`,
       );
       content.querySelectorAll("[data-setting]").forEach((button) =>
         button.addEventListener("click", () => {
@@ -222,4 +225,11 @@ export function bindInteractions(state) {
       label.textContent = "Analyze my PC";
     }
   });
+
+  // A connection dialog may have been opened while the startup request was pending.
+  return function refreshSystemConnection() {
+    if (dialog.open && title.textContent === "System connection") {
+      openUtility("system");
+    }
+  };
 }

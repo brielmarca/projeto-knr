@@ -2,19 +2,20 @@ import { topNavigation } from "./navigation.js";
 import { hardwareMetric } from "./hardware.js";
 import { systemOrb } from "./orb.js";
 import { modules, optimizationCard } from "./modules.js";
-import { badge, icon, escapeHtml as e } from "../ui.js";
+import { badge, icon, status, escapeHtml as e } from "../ui.js";
+import { connectionLabel, telemetryLabel } from "../data/state.js";
 
 /** @param {import('../data/state.js').DashboardState} state */
 export function appShell(state) {
   const mock = state.source === "mock";
   return `<a class="skip-link" href="#home">Skip to dashboard</a>
-    ${topNavigation()}
+    ${topNavigation(state)}
     <main id="home" tabindex="-1">
       <section class="hardware-strip" aria-label="Hardware overview">${state.hardware.map((metric) => hardwareMetric(metric, mock)).join("")}</section>
       <div class="dashboard">
         <section class="card hero" aria-labelledby="hero-title">
           <div class="hero-content">
-            <div class="hero-toolbar">${badge(mock ? "Development preview · Mock data" : "Windows telemetry · Not connected")}
+            <div class="hero-toolbar"><span class="badge" data-state="neutral" id="telemetry-status" role="status">${e(telemetryLabel(state))}</span>
               <div class="mode-switch" role="group" aria-label="Optimization mode">
                 <button data-mode="smart" aria-pressed="true">${icon("shield")}Smart Mode</button>
                 <button data-mode="advanced" aria-pressed="false">${icon("settings")}Advanced</button>
@@ -41,6 +42,23 @@ export function appShell(state) {
         </div>
       </div>
     </main>
-    <footer><span>Profile: <strong>Balanced Performance</strong></span><span>Windows System Restore: <strong>${e(state.restore)}</strong></span><span class="footer-source">${mock ? "Development preview · Mock data" : "Windows engine not connected"}</span></footer>
+    <footer><span>Profile: <strong>Balanced Performance</strong></span><span>Windows System Restore: <strong>${e(state.restore)}</strong></span><span class="footer-source">${e(state.memoryTelemetry ? telemetryLabel(state) : mock ? "Development preview · Mock data" : "Windows engine not connected")}</span></footer>
     <dialog id="utility-dialog" aria-labelledby="dialog-title"><div class="dialog-header"><h2 id="dialog-title"></h2><button class="icon-button" id="close-dialog" aria-label="Close dialog">${icon("close")}</button></div><div id="dialog-content"></div></dialog>`;
+}
+
+/** Update only telemetry, preserving focus, open dialogs and bound interactions.
+ * @param {Element} app
+ * @param {import('../data/state.js').DashboardState} state
+ */
+export function updateMemoryTelemetry(app, state) {
+  app.setAttribute("data-source", state.source);
+  const metric = state.hardware.find((item) => item.label === "Memory");
+  const card = app.querySelector('[data-metric="Memory"]');
+  if (metric && card) card.outerHTML = hardwareMetric(metric, false);
+  for (const selector of ["#telemetry-status", ".footer-source"]) {
+    const label = app.querySelector(selector);
+    if (label) label.textContent = telemetryLabel(state);
+  }
+  const connection = app.querySelector(".system-status");
+  if (connection) connection.innerHTML = status(connectionLabel(state));
 }

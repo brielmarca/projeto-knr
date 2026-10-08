@@ -1,0 +1,116 @@
+use krz_telemetry::{CollectionError, SystemSnapshotV1};
+use serde::Serialize;
+
+/// Stable IPC failures. Internal worker/panic details never cross the boundary.
+#[derive(Debug, PartialEq, Eq, Serialize)]
+#[serde(tag = "code", rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum SnapshotError {
+    UnsupportedPlatform,
+    WindowsApi {
+        #[serde(rename = "win32Code")]
+        win32_code: u32,
+    },
+    InvalidMemory,
+    CollectionTaskFailed,
+}
+
+impl From<CollectionError> for SnapshotError {
+    fn from(error: CollectionError) -> Self {
+        match error {
+            CollectionError::UnsupportedPlatform => Self::UnsupportedPlatform,
+            CollectionError::WindowsApi { code } => Self::WindowsApi { win32_code: code },
+            CollectionError::InvalidMemory => Self::InvalidMemory,
+        }
+    }
+}
+
+/// Read-only, argument-free IPC. The native collector runs on a blocking worker,
+/// not the webview thread or an async executor worker.
+#[tauri::command]
+pub async fn collect_system_snapshot() -> Result<SystemSnapshotV1, SnapshotError> {
+    collect_on_worker(krz_telemetry::collect_system_snapshot).await
+}
+
+async fn collect_on_worker(
+    collect: impl FnOnce() -> Result<SystemSnapshotV1, CollectionError> + Send + 'static,
+) -> Result<SystemSnapshotV1, SnapshotError> {
+    tauri::async_runtime::spawn_blocking(collect)
+        .await
+        .map_err(|_| SnapshotError::CollectionTaskFailed)?
+        .map_err(SnapshotError::from)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use krz_telemetry::MemorySnapshot;
+    use serde_json::json;
+
+    #[test]
+    fn worker_preserves_snapshot_wire_shape_and_runs_on_another_thread() {
+        tauri::async_runtime::block_on(async {
+            let caller = std::thread::current().id();
+            let snapshot = collect_on_worker(move || {
+                assert_ne!(std::thread::current().id(), caller);
+                Ok(SystemSnapshotV1 {
+                    schema_version: 1,
+                    collected_at: "2026-10-07T12:00:00.000Z".into(),
+                    memory: Some(MemorySnapshot {
+                        total_bytes: 17_179_869_184,
+                        available_bytes: 4_294_967_296,
+                        used_bytes: 12_884_901_888,
+                        usage_percent: 75.0,
+                    }),
+                })
+            })
+            .await
+            .unwrap();
+            let fixture: serde_json::Value = serde_json::from_str(include_str!(
+                "../../contracts/fixtures/memory-snapshot.json"
+            ))
+            .unwrap();
+            assert_eq!(serde_json::to_value(snapshot).unwrap(), fixture);
+        });
+    }
+
+    #[test]
+    fn collection_failures_have_stable_structured_payloads() {
+        for (error, expected) in [
+            (
+                CollectionError::UnsupportedPlatform,
+                json!({ "code": "UNSUPPORTED_PLATFORM" }),
+            ),
+            (
+                CollectionError::WindowsApi { code: 5 },
+                json!({ "code": "WINDOWS_API", "win32Code": 5 }),
+            ),
+            (
+                CollectionError::InvalidMemory,
+                json!({ "code": "INVALID_MEMORY" }),
+            ),
+        ] {
+            let result = tauri::async_runtime::block_on(collect_on_worker(|| Err(error)));
+            assert_eq!(serde_json::to_value(result.unwrap_err()).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn worker_panic_is_a_structured_error_without_panic_details() {
+        let result = tauri::async_runtime::block_on(collect_on_worker(|| {
+            panic!("private worker failure details");
+        }));
+        assert_eq!(
+            serde_json::to_value(result.unwrap_err()).unwrap(),
+            json!({ "code": "COLLECTION_TASK_FAILED" })
+        );
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    fn command_preserves_unsupported_platform() {
+        assert_eq!(
+            tauri::async_runtime::block_on(collect_system_snapshot()),
+            Err(SnapshotError::UnsupportedPlatform)
+        );
+    }
+}

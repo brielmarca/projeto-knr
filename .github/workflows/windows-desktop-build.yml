@@ -30,6 +30,8 @@ jobs:
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
 
       - name: Cache Rust build
         uses: Swatinem/rust-cache@v2
@@ -42,6 +44,30 @@ jobs:
       - name: Verify existing frontend
         run: npm run check
 
+      - name: Install snapshot contract dependencies
+        run: npm ci --prefix contracts
+
+      - name: Verify snapshot contract
+        run: npm test --prefix contracts
+
+      - name: Check native formatting
+        run: cargo fmt --manifest-path native/Cargo.toml --check
+
+      - name: Check desktop formatting
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
+
+      - name: Test native memory collector on Windows
+        run: cargo test --manifest-path native/Cargo.toml --locked
+
+      - name: Test desktop command and IPC permissions
+        run: cargo test --manifest-path src-tauri/Cargo.toml --locked
+
+      - name: Lint native collector
+        run: cargo clippy --manifest-path native/Cargo.toml --locked --all-targets -- -D warnings
+
+      - name: Lint desktop command
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --locked --all-targets -- -D warnings
+
       - name: Build NSIS installer
         run: npm run desktop:build
 
@@ -53,3 +79,23 @@ jobs:
           path: |
             src-tauri/target/release/bundle/nsis/*.exe
             src-tauri/target/release/krz-boost.exe
+
+  test-linux-unsupported:
+    name: Test Linux unsupported-platform IPC
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Tauri build prerequisites
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Test native unsupported-platform behavior
+        run: cargo test --manifest-path native/Cargo.toml --locked
+
+      - name: Test desktop command and IPC permissions
+        run: cargo test --manifest-path src-tauri/Cargo.toml --locked

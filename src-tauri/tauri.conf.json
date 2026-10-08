@@ -27,8 +27,8 @@
       }
     ],
     "security": {
-      "capabilities": [],
-      "csp": "default-src 'self'; connect-src 'self' http: https:; font-src 'self'; img-src 'self'; style-src 'self' 'unsafe-inline'",
+      "capabilities": ["memory-snapshot"],
+      "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost http: https:; font-src 'self'; img-src 'self'; style-src 'self' 'unsafe-inline'",
       "devCsp": "default-src 'self' http://127.0.0.1:5173; connect-src 'self' ipc: http://ipc.localhost http://127.0.0.1:5173 ws://127.0.0.1:5173; font-src 'self' http://127.0.0.1:5173; img-src 'self' data:; script-src 'self' 'unsafe-eval' http://127.0.0.1:5173; style-src 'self' 'unsafe-inline' http://127.0.0.1:5173"
     },
     "withGlobalTauri": false

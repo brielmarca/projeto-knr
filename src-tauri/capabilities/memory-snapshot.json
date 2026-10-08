@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "memory-snapshot",
+  "description": "Allow the local main window to collect a read-only memory snapshot.",
+  "local": true,
+  "windows": ["main"],
+  "permissions": ["allow-collect-system-snapshot"]
+}

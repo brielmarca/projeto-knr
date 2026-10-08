@@ -1577,8 +1577,20 @@ dependencies = [
 name = "krz-boost"
 version = "0.1.0"
 dependencies = [
+ "krz-telemetry",
+ "serde",
+ "serde_json",
  "tauri",
  "tauri-build",
+]
+
+[[package]]
+name = "krz-telemetry"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

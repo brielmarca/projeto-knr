@@ -33,13 +33,17 @@ export async function collectMemoryState({
         : undefined;
     /** @type {Record<string, string>} */
     const messages = {
-      UNSUPPORTED_PLATFORM: "Memory collection requires Windows.",
+      UNSUPPORTED_PLATFORM: "System telemetry collection requires Windows.",
       WINDOWS_API: "Windows could not read physical memory.",
       INVALID_MEMORY:
         "The native collector returned invalid memory measurements.",
+      INVALID_CPU: "The native collector returned invalid CPU measurements.",
+      CPU_WINDOWS_API: "Windows could not read CPU telemetry.",
+      UNSUPPORTED_CPU_TOPOLOGY:
+        "CPU sampling requires a single Windows processor group.",
       INVALID_SNAPSHOT: "The native snapshot failed validation.",
-      COLLECTION_TASK_FAILED: "The memory collection worker failed.",
-      TIMEOUT: "The memory request timed out. Reload to try again.",
+      COLLECTION_TASK_FAILED: "The telemetry collection worker failed.",
+      TIMEOUT: "The snapshot request timed out. Reload to try again.",
     };
     const state = unavailableState();
     state.memoryTelemetry = {
@@ -47,7 +51,7 @@ export async function collectMemoryState({
       message:
         typeof code === "string" && Object.hasOwn(messages, code)
           ? messages[code]
-          : "Memory collection failed. Reload to try again.",
+          : "System telemetry collection failed. Reload to try again.",
     };
     return state;
   } finally {

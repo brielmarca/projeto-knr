@@ -52,9 +52,11 @@ export function appShell(state) {
  */
 export function updateMemoryTelemetry(app, state) {
   app.setAttribute("data-source", state.source);
-  const metric = state.hardware.find((item) => item.label === "Memory");
-  const card = app.querySelector('[data-metric="Memory"]');
-  if (metric && card) card.outerHTML = hardwareMetric(metric, false);
+  for (const label of ["CPU", "Memory"]) {
+    const metric = state.hardware.find((item) => item.label === label);
+    const card = app.querySelector(`[data-metric="${label}"]`);
+    if (metric && card) card.outerHTML = hardwareMetric(metric, false);
+  }
   for (const selector of ["#telemetry-status", ".footer-source"]) {
     const label = app.querySelector(selector);
     if (label) label.textContent = telemetryLabel(state);

@@ -2,7 +2,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { collectMemoryState } from "../src/data/memory-ipc.js";
-import { unavailableState } from "../src/data/state.js";
+import {
+  unavailableState,
+  telemetryLabel,
+  connectionLabel,
+} from "../src/data/state.js";
 
 const snapshot = JSON.parse(
   readFileSync(
@@ -18,6 +22,48 @@ const collect = (response) =>
       return response;
     },
   });
+
+test("CPU snapshot maps measured zero, precision, topology and sampling window", async () => {
+  const fixture = JSON.parse(
+    readFileSync(
+      new URL(
+        "../contracts/fixtures/cpu-memory-snapshot.json",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  );
+  const state = await collect(fixture);
+  assert.deepEqual(state.cpu, fixture.cpu);
+  assert.deepEqual(state.hardware[0], {
+    label: "CPU",
+    name: "Test CPU",
+    value: "25.1%",
+    detail: "8C / 16T · 251 ms",
+    percent: 25.125,
+  });
+  assert.equal(connectionLabel(state), "CPU + Memory");
+  assert.equal(telemetryLabel(state), "Native snapshot · CPU + Memory");
+  const cpuOnly = await collect({
+    ...fixture,
+    memory: null,
+    cpu: { ...fixture.cpu, usagePercent: 0 },
+  });
+  assert.equal(cpuOnly.hardware[0].percent, 0);
+  assert.equal(connectionLabel(cpuOnly), "CPU only");
+  for (const index of [1, 3, 4])
+    assert.deepEqual(state.hardware[index], unavailableState().hardware[index]);
+  for (const key of ["impacts", "audit", "findings", "restore", "results"])
+    assert.deepEqual(state[key], unavailableState()[key]);
+  const missing = await collect({ ...snapshot, cpu: null });
+  assert.deepEqual(missing.hardware[0], unavailableState().hardware[0]);
+  const invalid = await collect({
+    ...fixture,
+    cpu: { ...fixture.cpu, sampleDurationMs: 0 },
+  });
+  assert.equal(invalid.memoryTelemetry.status, "error");
+  assert.deepEqual(invalid.hardware, unavailableState().hardware);
+});
 
 test("browser never calls native IPC", async () => {
   assert.deepEqual(
@@ -120,6 +166,9 @@ test("native and transport failures are unavailable without leaking raw errors",
     { code: "UNSUPPORTED_PLATFORM" },
     { code: "WINDOWS_API", win32Code: 5 },
     { code: "INVALID_MEMORY" },
+    { code: "INVALID_CPU" },
+    { code: "CPU_WINDOWS_API", win32Code: 5 },
+    { code: "UNSUPPORTED_CPU_TOPOLOGY" },
     { code: "COLLECTION_TASK_FAILED" },
     { code: "toString" },
     "<script>private details</script>",

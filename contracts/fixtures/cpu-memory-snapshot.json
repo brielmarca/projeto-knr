@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "collectedAt": "2026-10-07T12:00:00.000Z",
+  "memory": {
+    "totalBytes": 17179869184,
+    "availableBytes": 4294967296,
+    "usedBytes": 12884901888,
+    "usagePercent": 75.0
+  },
+  "cpu": {
+    "model": "Test CPU",
+    "logicalCoreCount": 16,
+    "physicalCoreCount": 8,
+    "usagePercent": 25.125,
+    "sampleDurationMs": 251
+  }
+}

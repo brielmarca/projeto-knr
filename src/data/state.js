@@ -1,6 +1,6 @@
 /** @typedef {{label: string, name: string, value: string, detail: string, percent: number | null}} HardwareMetric */
 /** @typedef {{status: 'loading' | 'ready' | 'unavailable' | 'error', message: string, collectedAt?: string}} MemoryTelemetry */
-/** @typedef {{source: 'unavailable' | 'mock' | 'native', memoryTelemetry?: MemoryTelemetry, hardware: HardwareMetric[], impacts: string[], audit: string, findings: string, restore: string, results: string[]}} DashboardState */
+/** @typedef {{source: 'unavailable' | 'mock' | 'native', memoryTelemetry?: MemoryTelemetry, cpu?: import('@krz/contracts').CpuSnapshot, hardware: HardwareMetric[], impacts: string[], audit: string, findings: string, restore: string, results: string[]}} DashboardState */
 
 /** No inferred health, measurements, or restore guarantees without telemetry. @returns {DashboardState} */
 export function unavailableState() {
@@ -26,13 +26,25 @@ export function unavailableState() {
   };
 }
 
-/** Start from disconnected state so memory can never imply other measurements.
+/** Start from disconnected state so a snapshot never implies uncollected measurements.
  * @param {import('@krz/contracts').SystemSnapshotV1} snapshot Validated IPC data.
  * @returns {DashboardState}
  */
 export function memorySnapshotState(snapshot) {
   const state = unavailableState();
   const memory = snapshot.memory;
+  const cpu = snapshot.cpu;
+  if (cpu) {
+    state.source = "native";
+    state.cpu = cpu;
+    state.hardware[0] = {
+      label: "CPU",
+      name: cpu.model,
+      value: `${Number(cpu.usagePercent.toFixed(1))}%`,
+      detail: `${cpu.physicalCoreCount}C / ${cpu.logicalCoreCount}T · ${cpu.sampleDurationMs} ms`,
+      percent: cpu.usagePercent,
+    };
+  }
   state.memoryTelemetry = {
     status: memory === null ? "unavailable" : "ready",
     message:
@@ -60,16 +72,21 @@ export function memorySnapshotState(snapshot) {
 /** @param {DashboardState} state */
 export function telemetryLabel(state) {
   if (state.source === "mock") return "Development preview · Mock data";
+  if (state.cpu) return `Native snapshot · ${connectionLabel(state)}`;
   if (!state.memoryTelemetry) return "Windows telemetry · Not connected";
   return {
-    loading: "Memory snapshot · Loading",
+    loading: "System snapshot · Loading",
     ready: "Native snapshot · Memory only",
-    unavailable: "Memory snapshot · Unavailable",
-    error: "Memory snapshot · Error",
+    unavailable: "System snapshot · Unavailable",
+    error: "System snapshot · Error",
   }[state.memoryTelemetry.status];
 }
 
 /** @param {DashboardState} state */
 export function connectionLabel(state) {
+  if (state.cpu)
+    return state.memoryTelemetry?.status === "ready"
+      ? "CPU + Memory"
+      : "CPU only";
   return state.source === "native" ? "Memory only" : "Not connected";
 }

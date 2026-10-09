@@ -43,7 +43,9 @@ fn real_handler_and_capability_allow_only_local_main_window() {
         let snapshot = result.expect("local main must reach the native Windows collector");
         assert_eq!(snapshot["schemaVersion"], json!(1));
         assert!(snapshot["memory"]["totalBytes"].as_u64().unwrap() > 0);
-        assert_eq!(snapshot.as_object().unwrap().len(), 3);
+        assert!(snapshot["cpu"]["logicalCoreCount"].as_u64().unwrap() > 0);
+        assert!(snapshot["cpu"]["sampleDurationMs"].as_u64().unwrap() >= 250);
+        assert_eq!(snapshot.as_object().unwrap().len(), 4);
     } else {
         assert_eq!(result, Err(json!({ "code": "UNSUPPORTED_PLATFORM" })));
     }

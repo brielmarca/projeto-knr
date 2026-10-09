@@ -43,8 +43,23 @@ export const memorySchema = z
     }
   });
 
+/** CPU utilization averaged over sampleDurationMs, not an instantaneous reading. */
+export const cpuSchema = z
+  .object({
+    model: z.string().trim().min(1).max(512),
+    logicalCoreCount: bytes.positive(),
+    physicalCoreCount: bytes.positive(),
+    usagePercent: z.number().finite().min(0).max(100),
+    sampleDurationMs: bytes.positive(),
+  })
+  .strict()
+  .refine((cpu) => cpu.physicalCoreCount <= cpu.logicalCoreCount, {
+    path: ["physicalCoreCount"],
+    message: "Physical core count must not exceed logical core count",
+  });
+
 /**
- * Transport-independent system snapshot v1, initially limited to memory.
+ * Transport-independent system snapshot v1.
  * collectedAt is an ISO UTC timestamp. Required null means unavailable;
  * zero available/used bytes is a valid measurement, never missing data.
  * Validation rejects inconsistent derived values rather than repairing them.
@@ -54,8 +69,11 @@ export const systemSnapshotSchema = z
     schemaVersion: z.literal(1),
     collectedAt: z.iso.datetime(),
     memory: memorySchema.nullable(),
+    // Optional for compatibility with existing memory-only v1 producers.
+    cpu: cpuSchema.nullable().optional(),
   })
   .strict();
 
 export type MemorySnapshot = z.infer<typeof memorySchema>;
+export type CpuSnapshot = z.infer<typeof cpuSchema>;
 export type SystemSnapshotV1 = z.infer<typeof systemSnapshotSchema>;

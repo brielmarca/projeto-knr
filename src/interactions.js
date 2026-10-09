@@ -138,7 +138,7 @@ export function bindInteractions(state) {
       openDialog(
         "System connection",
         (state.memoryTelemetry
-          ? `<p>${e(state.memoryTelemetry.message)}</p>${state.memoryTelemetry.collectedAt ? `<p>Collected at <time datetime="${e(state.memoryTelemetry.collectedAt)}">${e(state.memoryTelemetry.collectedAt)}</time></p>` : ""}<p>Only physical memory is supported. Hardware health, diagnostics, protection, and restore status cannot be verified.</p>`
+          ? `<p>${e(state.memoryTelemetry.message)}</p>${state.cpu ? `<p>CPU: ${e(String(state.cpu.physicalCoreCount))} physical cores / ${e(String(state.cpu.logicalCoreCount))} logical processors. CPU usage averaged over ${e(String(state.cpu.sampleDurationMs))} ms, collected once at startup; not live monitoring.</p>` : ""}${state.memoryTelemetry.collectedAt ? `<p>Collected at <time datetime="${e(state.memoryTelemetry.collectedAt)}">${e(state.memoryTelemetry.collectedAt)}</time></p>` : ""}<p>CPU and physical memory collection are supported. Hardware health, diagnostics, protection, and restore status cannot be verified.</p>`
           : "<p>Windows telemetry is not connected. Hardware health, protection, and restore status cannot be verified.</p>") +
           (mock
             ? '<p class="dialog-note">The dashboard currently displays labeled development fixtures from the Stitch design.</p>'

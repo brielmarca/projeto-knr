@@ -11,6 +11,12 @@ pub enum SnapshotError {
         win32_code: u32,
     },
     InvalidMemory,
+    InvalidCpu,
+    CpuWindowsApi {
+        #[serde(rename = "win32Code")]
+        win32_code: u32,
+    },
+    UnsupportedCpuTopology,
     CollectionTaskFailed,
 }
 
@@ -20,6 +26,9 @@ impl From<CollectionError> for SnapshotError {
             CollectionError::UnsupportedPlatform => Self::UnsupportedPlatform,
             CollectionError::WindowsApi { code } => Self::WindowsApi { win32_code: code },
             CollectionError::InvalidMemory => Self::InvalidMemory,
+            CollectionError::InvalidCpu => Self::InvalidCpu,
+            CollectionError::CpuWindowsApi { code } => Self::CpuWindowsApi { win32_code: code },
+            CollectionError::UnsupportedCpuTopology => Self::UnsupportedCpuTopology,
         }
     }
 }
@@ -43,7 +52,7 @@ async fn collect_on_worker(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use krz_telemetry::MemorySnapshot;
+    use krz_telemetry::{CpuSnapshot, MemorySnapshot};
     use serde_json::json;
 
     #[test]
@@ -54,6 +63,13 @@ mod tests {
                 assert_ne!(std::thread::current().id(), caller);
                 Ok(SystemSnapshotV1 {
                     schema_version: 1,
+                    cpu: Some(CpuSnapshot {
+                        model: "Test CPU".into(),
+                        logical_core_count: 16,
+                        physical_core_count: 8,
+                        usage_percent: 25.125,
+                        sample_duration_ms: 251,
+                    }),
                     collected_at: "2026-10-07T12:00:00.000Z".into(),
                     memory: Some(MemorySnapshot {
                         total_bytes: 17_179_869_184,
@@ -66,7 +82,7 @@ mod tests {
             .await
             .unwrap();
             let fixture: serde_json::Value = serde_json::from_str(include_str!(
-                "../../contracts/fixtures/memory-snapshot.json"
+                "../../contracts/fixtures/cpu-memory-snapshot.json"
             ))
             .unwrap();
             assert_eq!(serde_json::to_value(snapshot).unwrap(), fixture);
@@ -87,6 +103,18 @@ mod tests {
             (
                 CollectionError::InvalidMemory,
                 json!({ "code": "INVALID_MEMORY" }),
+            ),
+            (
+                CollectionError::InvalidCpu,
+                json!({ "code": "INVALID_CPU" }),
+            ),
+            (
+                CollectionError::CpuWindowsApi { code: 5 },
+                json!({ "code": "CPU_WINDOWS_API", "win32Code": 5 }),
+            ),
+            (
+                CollectionError::UnsupportedCpuTopology,
+                json!({ "code": "UNSUPPORTED_CPU_TOPOLOGY" }),
             ),
         ] {
             let result = tauri::async_runtime::block_on(collect_on_worker(|| Err(error)));

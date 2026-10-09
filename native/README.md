@@ -1,4 +1,4 @@
-# Native memory collector
+# Native CPU and memory collector
 
 Standalone Rust library; entry point: `krz_telemetry::collect_system_snapshot()`.
 On Windows, it reads total and available physical memory using
@@ -6,9 +6,22 @@ On Windows, it reads total and available physical memory using
 are derived from those measurements. Serialization matches
 `contracts/system-snapshot.ts` (v1, camelCase, UTC timestamp, bytes safe for JS).
 
-Errors are explicit: `UnsupportedPlatform`, `WindowsApi { code }`, or
-`InvalidMemory`. A failed collection does not return a fabricated snapshot.
-This library has no IPC or frontend connection.
+CPU model comes from the read-only `ProcessorNameString` registry value for
+processor 0. `GetLogicalProcessorInformation` supplies physical cores and logical
+processor masks. Two `GetSystemTimes` readings, separated by a 250 ms sleep,
+supply usage: `(deltaKernel + deltaUser - deltaIdle) / (deltaKernel + deltaUser)`.
+Kernel time includes idle time. The snapshot reports the actual monotonic elapsed
+duration in milliseconds, and `collectedAt` is stamped at collection completion.
+The Tauri command runs this sampling work on its existing blocking worker.
+
+This first implementation supports a single Windows processor group. Multi-group
+hosts return `UnsupportedCpuTopology`, because `GetSystemTimes` only measures the
+calling thread's group there. It never presents partial-group usage as system usage.
+
+Errors are explicit: `UnsupportedPlatform`, `WindowsApi { code }`, `InvalidMemory`,
+`CpuWindowsApi { code }`, `InvalidCpu`, or `UnsupportedCpuTopology`. Any collection
+failure rejects the whole snapshot, including memory. Non-Windows builds return
+`UnsupportedPlatform`; all Windows API code and dependencies are cfg-gated.
 
 Checks from the repository root:
 
@@ -22,4 +35,4 @@ npm test --prefix contracts
 Run `cargo test` on Windows as well to exercise the real Win32 call. Cross-target
 `cargo check --manifest-path native/Cargo.toml --target x86_64-pc-windows-gnu
 --all-targets` checks compilation only (requires that Rust target).
-The shared memory fixture is synthetic test data, not a runtime fallback.
+The shared memory and CPU fixtures are synthetic test data, not runtime fallbacks.

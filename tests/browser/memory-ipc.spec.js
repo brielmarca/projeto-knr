@@ -34,6 +34,58 @@ async function stubIpc(
 }
 
 for (const url of ["/", "http://127.0.0.1:4173/code.html"]) {
+  test(`CPU sample renders through startup IPC: ${url}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    const response = JSON.parse(
+      readFileSync(
+        new URL(
+          "../../contracts/fixtures/cpu-memory-snapshot.json",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+    );
+    response.cpu.model =
+      'Test <img src=x onerror="window.cpuInjected=true"> CPU';
+    await stubIpc(page, { response });
+    await page.goto(url);
+    const cpu = page.getByRole("article", {
+      name: "CPU snapshot",
+      exact: true,
+    });
+    await expect(cpu).toContainText(response.cpu.model);
+    await expect(cpu).toContainText("8C / 16T · 251 ms");
+    await expect(cpu.getByRole("meter")).toHaveAttribute("value", "25.125");
+    await expect(cpu.locator("img")).toHaveCount(0);
+    expect(
+      await cpu.evaluate((card) => {
+        const detail = card
+          .querySelector(".metric-detail")
+          .getBoundingClientRect();
+        return detail.right <= card.getBoundingClientRect().right;
+      }),
+    ).toBe(true);
+    await expect(page.locator("#telemetry-status")).toHaveText(
+      "Native snapshot · CPU + Memory",
+    );
+    for (const label of ["GPU", "Storage", "Network"]) {
+      await expect(
+        page.getByRole("article", {
+          name: `${label} unavailable`,
+          exact: true,
+        }),
+      ).toContainText("—");
+    }
+    await page
+      .getByRole("button", { name: "View system connection status" })
+      .click();
+    await expect(page.getByRole("dialog")).toContainText(
+      "CPU usage averaged over 251 ms",
+    );
+    await expect(page.getByRole("dialog")).toContainText("not live monitoring");
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  });
+
   test(`Tauri memory overrides dev fixtures and leaves diagnostics disconnected: ${url}`, async ({
     page,
   }) => {
@@ -83,7 +135,7 @@ test("pending memory does not block interactions or reset focus/mode when it arr
   await stubIpc(page, { deferred: true });
   await page.goto("/");
   await expect(page.locator("#telemetry-status")).toHaveText(
-    "Memory snapshot · Loading",
+    "System snapshot · Loading",
   );
   const advanced = page.getByRole("button", { name: "Advanced", exact: true });
   await advanced.click();
@@ -116,7 +168,7 @@ for (const [name, options, status, message] of [
     "unsupported platform",
     { error: { code: "UNSUPPORTED_PLATFORM" } },
     "Unavailable",
-    "Memory collection requires Windows.",
+    "System telemetry collection requires Windows.",
   ],
   [
     "native failure",
@@ -143,7 +195,7 @@ for (const [name, options, status, message] of [
     await stubIpc(page, options);
     await page.goto("/");
     await expect(page.locator("#telemetry-status")).toHaveText(
-      `Memory snapshot · ${status}`,
+      `System snapshot · ${status}`,
     );
     await expect(page.locator("#app")).toHaveAttribute(
       "data-source",

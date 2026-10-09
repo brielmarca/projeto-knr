@@ -1,4 +1,4 @@
-//! Read-only physical memory telemetry. Wire shape: contracts/system-snapshot.ts.
+//! Read-only memory and sampled CPU telemetry. Wire shape: contracts/system-snapshot.ts.
 
 use chrono::{DateTime, SecondsFormat, Utc};
 use serde::Serialize;
@@ -20,10 +20,22 @@ pub struct MemorySnapshot {
 
 #[derive(Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct CpuSnapshot {
+    pub model: String,
+    pub logical_core_count: u32,
+    pub physical_core_count: u32,
+    pub usage_percent: f64,
+    pub sample_duration_ms: u64,
+}
+
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SystemSnapshotV1 {
     pub schema_version: u8,
     pub collected_at: String,
     pub memory: Option<MemorySnapshot>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cpu: Option<CpuSnapshot>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -31,12 +43,22 @@ pub enum CollectionError {
     UnsupportedPlatform,
     WindowsApi { code: u32 },
     InvalidMemory,
+    InvalidCpu,
+    CpuWindowsApi { code: u32 },
+    UnsupportedCpuTopology,
 }
 
 impl fmt::Display for CollectionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::UnsupportedPlatform => f.write_str("Physical memory collection requires Windows"),
+            Self::UnsupportedPlatform => {
+                f.write_str("System telemetry collection requires Windows")
+            }
+            Self::InvalidCpu => f.write_str("CPU measurements violate the snapshot contract"),
+            Self::CpuWindowsApi { code } => write!(f, "CPU collection failed (Win32 error {code})"),
+            Self::UnsupportedCpuTopology => {
+                f.write_str("CPU sampling requires a single processor group")
+            }
             Self::WindowsApi { code } => {
                 write!(f, "GlobalMemoryStatusEx failed (Win32 error {code})")
             }
@@ -51,7 +73,13 @@ impl std::error::Error for CollectionError {}
 
 /// Collect a point-in-time v1 snapshot. Failures return an error, never fake data.
 pub fn collect_system_snapshot() -> Result<SystemSnapshotV1, CollectionError> {
-    snapshot_from_memory(collect_memory(), Utc::now())
+    let mut snapshot = snapshot_from_memory(collect_memory(), Utc::now())?;
+    #[cfg(target_os = "windows")]
+    {
+        snapshot.cpu = Some(windows::cpu()?);
+    }
+    snapshot.collected_at = Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true);
+    Ok(snapshot)
 }
 
 #[cfg(target_os = "windows")]
@@ -75,6 +103,7 @@ fn snapshot_from_memory(
     let used_bytes = total_bytes - available_bytes;
     Ok(SystemSnapshotV1 {
         schema_version: 1,
+        cpu: None,
         collected_at: collected_at.to_rfc3339_opts(SecondsFormat::Millis, true),
         memory: Some(MemorySnapshot {
             total_bytes,
@@ -85,9 +114,44 @@ fn snapshot_from_memory(
     })
 }
 
+/// Windows kernel time includes idle time. Reject counter regressions and empty samples.
+#[cfg(any(target_os = "windows", test))]
+fn cpu_usage(before: [u64; 3], after: [u64; 3]) -> Result<f64, CollectionError> {
+    let delta = |index: usize| {
+        after[index]
+            .checked_sub(before[index])
+            .ok_or(CollectionError::InvalidCpu)
+    };
+    let idle = delta(0)?;
+    let kernel = delta(1)?;
+    let user = delta(2)?;
+    let total = kernel
+        .checked_add(user)
+        .ok_or(CollectionError::InvalidCpu)?;
+    if total == 0 || idle > kernel {
+        return Err(CollectionError::InvalidCpu);
+    }
+    Ok((total - idle) as f64 / total as f64 * 100.0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cpu_usage_accounts_for_idle_in_kernel_and_preserves_zero() {
+        assert_eq!(cpu_usage([10, 20, 30], [30, 60, 70]), Ok(75.0));
+        assert_eq!(cpu_usage([0; 3], [50, 50, 0]), Ok(0.0));
+        assert_eq!(cpu_usage([0; 3], [0, 50, 50]), Ok(100.0));
+        for (before, after) in [
+            ([0; 3], [0; 3]),
+            ([1; 3], [0; 3]),
+            ([0; 3], [2, 1, 2]),
+            ([0; 3], [0, u64::MAX, 1]),
+        ] {
+            assert_eq!(cpu_usage(before, after), Err(CollectionError::InvalidCpu));
+        }
+    }
 
     fn map(total: u64, available: u64) -> Result<SystemSnapshotV1, CollectionError> {
         snapshot_from_memory(
@@ -101,6 +165,23 @@ mod tests {
         let snapshot = map(16 * 1024_u64.pow(3), 4 * 1024_u64.pow(3)).unwrap();
         let expected: serde_json::Value = serde_json::from_str(include_str!(
             "../../contracts/fixtures/memory-snapshot.json"
+        ))
+        .unwrap();
+        assert_eq!(serde_json::to_value(snapshot).unwrap(), expected);
+    }
+
+    #[test]
+    fn serializes_cpu_to_shared_contract_fixture() {
+        let mut snapshot = map(16 * 1024_u64.pow(3), 4 * 1024_u64.pow(3)).unwrap();
+        snapshot.cpu = Some(CpuSnapshot {
+            model: "Test CPU".into(),
+            logical_core_count: 16,
+            physical_core_count: 8,
+            usage_percent: 25.125,
+            sample_duration_ms: 251,
+        });
+        let expected: serde_json::Value = serde_json::from_str(include_str!(
+            "../../contracts/fixtures/cpu-memory-snapshot.json"
         ))
         .unwrap();
         assert_eq!(serde_json::to_value(snapshot).unwrap(), expected);
@@ -168,6 +249,12 @@ mod tests {
     #[test]
     fn collects_real_physical_memory() {
         let snapshot = collect_system_snapshot().unwrap();
+        let cpu = snapshot.cpu.unwrap();
+        assert!(!cpu.model.trim().is_empty());
+        assert!(cpu.physical_core_count > 0);
+        assert!(cpu.logical_core_count >= cpu.physical_core_count);
+        assert!((0.0..=100.0).contains(&cpu.usage_percent));
+        assert!(cpu.sample_duration_ms >= 250);
         let memory = snapshot.memory.unwrap();
         assert!(memory.total_bytes > 0);
         assert!(memory.available_bytes <= memory.total_bytes);

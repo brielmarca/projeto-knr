@@ -31,11 +31,11 @@
 KRZ Boost is a desktop-first dashboard UI for reviewing Windows performance work: hardware overview, diagnostic baseline, and a grid of optimization modules. This repository contains two working pieces:
 
 - **A production frontend** — vanilla JavaScript ES modules, compiled Tailwind 3, built with Vite. `screen.png` and the current product brief are the visual authority; the implementation follows them closely.
-- **A Tauri 2 desktop shell** — the same frontend packaged into a native Windows window and NSIS installer, with a validated read-only memory snapshot displayed at startup.
+- **A Tauri 2 desktop shell** — the same frontend packaged into a native Windows window and NSIS installer, with a validated read-only CPU and memory snapshot displayed at startup.
 
-Everything is designed around one rule: **missing data stays missing**. Only physical memory is collected in the Windows desktop app. Other hardware metrics, findings, benchmarks, and restore status remain unavailable/unknown, and applying changes stays disabled.
+Everything is designed around one rule: **missing data stays missing**. CPU and physical memory are collected in the Windows desktop app. Other hardware metrics, findings, benchmarks, and restore status remain unavailable/unknown, and applying changes stays disabled.
 
-> **Integration status:** `native/` collects physical memory on Windows, and `contracts/` defines the v1 snapshot. There is no Windows Agent, PowerShell or shell execution, API client, backend, PostgreSQL, or optimization/restore-point logic. `backend/` remains a placeholder. `VITE_API_URL` is reserved for a future integration; see `.env.example`.
+> **Integration status:** `native/` collects CPU and physical memory on Windows, and `contracts/` defines the v1 snapshot. CPU includes model, logical/physical core counts, sampled usage, and actual sample duration. The first CPU collector supports a single Windows processor group; see [native collection details](native/README.md). There is no Windows Agent, PowerShell or shell execution, API client, backend, PostgreSQL, or optimization/restore-point logic. `backend/` remains a placeholder. `VITE_API_URL` is reserved for a future integration; see `.env.example`.
 
 ---
 
@@ -74,7 +74,7 @@ The live app renders the same layout with honest data states:
 - [x] Reduced-motion and forced-colors stylesheets
 - [x] Shared design tokens (`src/tokens.css`) and reusable Card/Button/Badge/Status styles (`src/styles.css`)
 - [x] Tauri 2 desktop shell: one local-main-window memory capability, no global Tauri API, restrictive CSP, current-user NSIS install
-- [x] Read-only Rust physical-memory collector, typed IPC command, and validated frontend memory snapshot; explicit unsupported-platform errors on Linux
+- [x] Read-only Rust CPU and physical-memory collector, typed IPC command, and validated frontend snapshot; explicit unsupported-platform errors on Linux
 - [x] Windows x64 CI workflow producing installer and executable artifacts
 - [x] Quality gate: formatting, ESLint, strict JSDoc typechecking, Node tests, production build, browser tests
 
@@ -120,13 +120,13 @@ flowchart TD
     H --> I["Tauri 2 WebView window (src-tauri)"]
     I --> J["NSIS installer — Windows x64"]
     K["backend/ — placeholder"] -.->|reserved integration point| D
-    I -->|validated startup snapshot| L["native/ — Windows physical memory"]
+    I -->|validated startup snapshot| L["native/ — Windows CPU and physical memory"]
     L --> M["contracts/ — snapshot v1"]
 ```
 
 Key rules encoded in the code:
 
-- `src/data/state.js` defines disconnected state and maps validated native memory snapshots. `src/data/memory-ipc.js` invokes IPC only in Tauri and validates with the shared contract; fixtures never substitute for missing data.
+- `src/data/state.js` defines disconnected state and maps validated native CPU and memory snapshots. `src/data/memory-ipc.js` invokes IPC only in Tauri and validates with the shared contract; fixtures never substitute for missing data.
 - `src/data/mock.js` is development-only. Vite's compile-time `DEV` branch keeps it out of production, and browser tests assert that production never displays sample telemetry even with a `?mock=true` query parameter.
 - Dynamic text is escaped through `src/ui.js` before interpolation into trusted templates.
 - The Tauri shell grants only `collect_system_snapshot` to the local `main` window, keeps `withGlobalTauri: false`, and allows IPC through its CSP. Remote origins and other windows cannot invoke the collector.
@@ -137,10 +137,10 @@ Key rules encoded in the code:
 - `src/styles.css` — shared Card, Button, Badge, StatusIndicator and desktop layout styles
 - `src/components/` — app shell, navigation, hardware metrics, original concentric system orb, optimization cards
 - `src/interactions.js` — mode selection, local module search, native dialogs, keyboard shortcuts, explicit analysis feedback
-- `src/data/` — typed dashboard state, Tauri-only memory adapter, and development-only screenshot fixtures
+- `src/data/` — typed dashboard state, Tauri-only snapshot adapter, and development-only screenshot fixtures
 - `src-tauri/` — Tauri 2 configuration, Rust entry point, icons
-- `native/` — read-only Windows memory collector; unsupported elsewhere
-- `contracts/` — standalone v1 memory schema and contract tests
+- `native/` — read-only Windows CPU and memory collector; unsupported elsewhere
+- `contracts/` — standalone v1 snapshot schema and contract tests
 - `tests/` — Node unit tests and Playwright browser tests (keyboard, search, dialogs, mock isolation, layouts, axe)
 - `DESIGN.md` — legacy reference; contains superseded colors, glass treatments, and navigation guidance
 
@@ -179,7 +179,7 @@ Automated accessibility checks do not replace manual Windows screen-reader and n
 
 ## Windows & Tauri build
 
-The existing Vite frontend is packaged as a Tauri 2 desktop application. At startup, the UI reads one physical-memory snapshot through the native command and validates it before rendering used/total GiB and usage percentage. The system connection dialog shows its timestamp. This is not live monitoring; reload to collect again. Unsupported platforms, invalid responses, collection errors, or a five-second timeout leave memory explicitly unavailable. Browser production stays disconnected and browser development retains labeled fixtures. See [the IPC reference and checks](src-tauri/README.md). No Agent, PowerShell, backend, PostgreSQL, or optimization engine is bundled.
+The existing Vite frontend is packaged as a Tauri 2 desktop application. At startup, the UI reads one CPU and physical-memory snapshot through the native command and validates it before rendering. The CPU card shows model, physical/logical cores, sampled usage and sample duration; memory shows used/total GiB and usage percentage. The system connection dialog shows the collection timestamp. This is not live monitoring; reload to collect again. Unsupported platforms or CPU topology, invalid responses, collection errors, or a five-second timeout leave telemetry explicitly unavailable. Browser production stays disconnected and browser development retains labeled fixtures. See [the IPC reference and checks](src-tauri/README.md). No Agent, PowerShell, backend, PostgreSQL, or optimization engine is bundled.
 
 Root `npm ci` also builds the local `@krz/contracts` package via `prepare`. After changing the shared schema, run `npm run build --prefix contracts` before developing the frontend.
 
@@ -190,7 +190,7 @@ npm run desktop:build  # builds an NSIS installer (Windows)
 
 - `desktop:dev` requires Rust and the platform-specific Tauri development prerequisites.
 - `desktop:build` creates an NSIS installer with `currentUser` install mode; Windows x64 artifacts (installer + `krz-boost.exe`) are also produced by `.github/workflows/windows-desktop-build.yml` on `windows-latest`.
-- **Configuration:** `VITE_API_URL` is compile-time, public configuration set in the build environment (see `.env.example`). No API client exists yet, so the variable does not change current unavailable behavior; it is never hardcoded into Tauri and never holds secrets. The sole Tauri capability permits read-only memory collection from the local main window.
+- **Configuration:** `VITE_API_URL` is compile-time, public configuration set in the build environment (see `.env.example`). No API client exists yet, so the variable does not change current unavailable behavior; it is never hardcoded into Tauri and never holds secrets. The sole Tauri capability permits read-only snapshot collection from the local main window.
 - **Window:** 1280×800 default, 1000×650 minimum, centered and resizable.
 - **Icon:** temporary reuse of the KRZ bolt mark; final production artwork is pending.
 
@@ -207,7 +207,7 @@ A web build or Linux check does not prove Windows installer or native behavior �
 | Accessibility (automated axe, keyboard, reduced motion)              | Implemented; manual Windows testing still pending |
 | Web packaging (Vite production build)                                | Working                                           |
 | Windows desktop shell (Tauri 2 + NSIS)                               | Working shell; CI workflow in place               |
-| Native memory collector + IPC | Implemented; validated startup snapshot displayed in Tauri |
+| Native CPU and memory collector + IPC | Implemented; validated startup snapshot displayed in Tauri |
 | Windows Agent / backend / database / optimization engine | **Not started** — placeholders only |
 
 The product is a truthful, accessible UI foundation. It deliberately refuses to simulate scans, findings, performance gains, restore points, or optimizations as real operations.
@@ -219,7 +219,7 @@ The product is a truthful, accessible UI foundation. It deliberately refuses to 
 Ordered priorities, not committed dates:
 
 1. **Define real interfaces first** — establish contracts before wiring any integration, keeping privileged operations out of frontend code.
-2. **Broader telemetry** — extend the memory-only integration with verified sources and schemas, preserving unavailable/unknown semantics for missing values.
+2. **Broader telemetry** — extend the CPU and memory integration with verified sources and schemas, preserving unavailable/unknown semantics for missing values.
 3. **Backend + persistence** — implement the API behind the reserved `VITE_API_URL` and populate the `backend/` placeholder, extending contracts as needed.
 4. **Authorized system operations** — only with explicit authorization and verified results; never promise restoration without evidence.
 5. **Desktop polish** — final icon artwork, Windows manual accessibility testing, installer verification.

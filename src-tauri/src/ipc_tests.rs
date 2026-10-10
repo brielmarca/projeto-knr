@@ -45,7 +45,14 @@ fn real_handler_and_capability_allow_only_local_main_window() {
         assert!(snapshot["memory"]["totalBytes"].as_u64().unwrap() > 0);
         assert!(snapshot["cpu"]["logicalCoreCount"].as_u64().unwrap() > 0);
         assert!(snapshot["cpu"]["sampleDurationMs"].as_u64().unwrap() >= 250);
-        assert_eq!(snapshot.as_object().unwrap().len(), 4);
+        let storage = &snapshot["storage"];
+        let total = storage["totalBytes"].as_u64().unwrap();
+        let free = storage["freeBytes"].as_u64().unwrap();
+        assert!(total > 0 && free <= total);
+        assert_eq!(storage["usedBytes"].as_u64().unwrap(), total - free);
+        assert!((0.0..=100.0).contains(&storage["freePercent"].as_f64().unwrap()));
+        assert_eq!(storage["volume"].as_str().unwrap().len(), 2);
+        assert_eq!(snapshot.as_object().unwrap().len(), 5);
     } else {
         assert_eq!(result, Err(json!({ "code": "UNSUPPORTED_PLATFORM" })));
     }

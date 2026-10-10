@@ -34,6 +34,76 @@ async function stubIpc(
 }
 
 for (const url of ["/", "http://127.0.0.1:4173/code.html"]) {
+  test(`System-drive free space renders through startup IPC: ${url}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    const response = JSON.parse(
+      readFileSync(
+        new URL(
+          "../../contracts/fixtures/system-snapshot.json",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+    );
+    response.storage.volume = "D:";
+    await stubIpc(page, { response });
+    await page.goto(url);
+    const storage = page.getByRole("article", {
+      name: "Storage snapshot",
+      exact: true,
+    });
+    await expect(storage).toContainText("System drive D:");
+    await expect(storage).toContainText("25% free");
+    await expect(storage).toContainText("128.0 / 512.0 GiB");
+    await expect(
+      storage.getByRole("meter", { name: "Storage free space at collection" }),
+    ).toHaveAttribute("value", "25");
+    await expect(page.locator("#telemetry-status")).toHaveText(
+      "Native snapshot · CPU + Memory + Storage",
+    );
+    for (const label of ["GPU", "Network"]) {
+      await expect(
+        page.getByRole("article", {
+          name: `${label} unavailable`,
+          exact: true,
+        }),
+      ).toContainText("—");
+    }
+    expect(
+      await storage.evaluate(
+        (card) =>
+          card.querySelector(".metric-detail").getBoundingClientRect().right <=
+          card.getBoundingClientRect().right,
+      ),
+    ).toBe(true);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+    await page
+      .getByRole("button", { name: "View system connection status" })
+      .click();
+    await expect(page.getByRole("dialog")).toContainText(
+      "384.0 GiB used, 512.0 GiB total",
+    );
+    await expect(page.getByRole("dialog")).toContainText(
+      "Windows quotas apply",
+    );
+    await expect(page.getByRole("dialog")).toContainText("not live monitoring");
+    await page.getByRole("button", { name: "Close dialog" }).click();
+    await page
+      .getByRole("button", { name: "Review cache", exact: true })
+      .click();
+    await expect(
+      page.getByRole("button", { name: "Apply optimization" }),
+    ).toBeDisabled();
+    await page.getByRole("button", { name: "Close dialog" }).click();
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  });
+
   test(`CPU sample renders through startup IPC: ${url}`, async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 720 });
     const response = JSON.parse(
@@ -164,6 +234,12 @@ test("connection dialog opened during collection updates without moving focus", 
 });
 
 for (const [name, options, status, message] of [
+  [
+    "storage collection failure",
+    { error: { code: "STORAGE_WINDOWS_API", win32Code: 5 } },
+    "Error",
+    "Windows could not read system-drive storage.",
+  ],
   [
     "unsupported platform",
     { error: { code: "UNSUPPORTED_PLATFORM" } },

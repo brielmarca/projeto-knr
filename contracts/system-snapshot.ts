@@ -58,6 +58,45 @@ export const cpuSchema = z
     message: "Physical core count must not exceed logical core count",
   });
 
+/** System-drive capacity available to the current user (Windows quotas apply). */
+export const storageSchema = z
+  .object({
+    volume: z.string().regex(/^[A-Z]:$/),
+    totalBytes: bytes.positive(),
+    freeBytes: bytes,
+    usedBytes: bytes,
+    freePercent: z.number().finite().min(0).max(100),
+  })
+  .strict()
+  .superRefine((storage, context) => {
+    if (storage.freeBytes > storage.totalBytes) {
+      context.addIssue({
+        code: "custom",
+        path: ["freeBytes"],
+        message: "Free bytes must not exceed total bytes",
+      });
+    }
+    if (storage.usedBytes !== storage.totalBytes - storage.freeBytes) {
+      context.addIssue({
+        code: "custom",
+        path: ["usedBytes"],
+        message: "Used bytes must equal total minus free bytes",
+      });
+    }
+    const freePercent = (storage.freeBytes / storage.totalBytes) * 100;
+    if (
+      Math.abs(storage.freePercent - freePercent) >
+      Number.EPSILON * 100 * 4
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["freePercent"],
+        message:
+          "Free percent must equal free bytes divided by total times 100",
+      });
+    }
+  });
+
 /**
  * Transport-independent system snapshot v1.
  * collectedAt is an ISO UTC timestamp. Required null means unavailable;
@@ -71,9 +110,12 @@ export const systemSnapshotSchema = z
     memory: memorySchema.nullable(),
     // Optional for compatibility with existing memory-only v1 producers.
     cpu: cpuSchema.nullable().optional(),
+    // Missing or null means unavailable, including older v1 producers.
+    storage: storageSchema.nullable().optional(),
   })
   .strict();
 
 export type MemorySnapshot = z.infer<typeof memorySchema>;
 export type CpuSnapshot = z.infer<typeof cpuSchema>;
+export type StorageSnapshot = z.infer<typeof storageSchema>;
 export type SystemSnapshotV1 = z.infer<typeof systemSnapshotSchema>;

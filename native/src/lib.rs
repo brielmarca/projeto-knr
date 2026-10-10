@@ -1,8 +1,11 @@
-//! Read-only memory and sampled CPU telemetry. Wire shape: contracts/system-snapshot.ts.
+//! Read-only memory, sampled CPU, and system-drive telemetry. Wire shape: contracts/system-snapshot.ts.
 
 use chrono::{DateTime, SecondsFormat, Utc};
 use serde::Serialize;
 use std::fmt;
+
+mod storage;
+pub use storage::StorageSnapshot;
 
 #[cfg(target_os = "windows")]
 mod windows;
@@ -36,6 +39,8 @@ pub struct SystemSnapshotV1 {
     pub memory: Option<MemorySnapshot>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cpu: Option<CpuSnapshot>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub storage: Option<StorageSnapshot>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -46,11 +51,19 @@ pub enum CollectionError {
     InvalidCpu,
     CpuWindowsApi { code: u32 },
     UnsupportedCpuTopology,
+    StorageWindowsApi { code: u32 },
+    InvalidStorage,
 }
 
 impl fmt::Display for CollectionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::StorageWindowsApi { code } => {
+                write!(f, "System-drive collection failed (Win32 error {code})")
+            }
+            Self::InvalidStorage => {
+                f.write_str("System-drive values violate the snapshot contract")
+            }
             Self::UnsupportedPlatform => {
                 f.write_str("System telemetry collection requires Windows")
             }
@@ -77,6 +90,7 @@ pub fn collect_system_snapshot() -> Result<SystemSnapshotV1, CollectionError> {
     #[cfg(target_os = "windows")]
     {
         snapshot.cpu = Some(windows::cpu()?);
+        snapshot.storage = Some(windows::system_drive_storage()?);
     }
     snapshot.collected_at = Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true);
     Ok(snapshot)
@@ -104,6 +118,7 @@ fn snapshot_from_memory(
     Ok(SystemSnapshotV1 {
         schema_version: 1,
         cpu: None,
+        storage: None,
         collected_at: collected_at.to_rfc3339_opts(SecondsFormat::Millis, true),
         memory: Some(MemorySnapshot {
             total_bytes,
@@ -255,6 +270,15 @@ mod tests {
         assert!(cpu.logical_core_count >= cpu.physical_core_count);
         assert!((0.0..=100.0).contains(&cpu.usage_percent));
         assert!(cpu.sample_duration_ms >= 250);
+        let storage = snapshot.storage.unwrap();
+        assert!(storage.total_bytes > 0);
+        assert!(storage.free_bytes <= storage.total_bytes);
+        assert_eq!(storage.used_bytes, storage.total_bytes - storage.free_bytes);
+        assert_eq!(
+            storage.free_percent,
+            storage.free_bytes as f64 / storage.total_bytes as f64 * 100.0
+        );
+        assert_eq!(storage.volume.len(), 2);
         let memory = snapshot.memory.unwrap();
         assert!(memory.total_bytes > 0);
         assert!(memory.available_bytes <= memory.total_bytes);

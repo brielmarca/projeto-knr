@@ -17,6 +17,11 @@ pub enum SnapshotError {
         win32_code: u32,
     },
     UnsupportedCpuTopology,
+    StorageWindowsApi {
+        #[serde(rename = "win32Code")]
+        win32_code: u32,
+    },
+    InvalidStorage,
     CollectionTaskFailed,
 }
 
@@ -29,6 +34,10 @@ impl From<CollectionError> for SnapshotError {
             CollectionError::InvalidCpu => Self::InvalidCpu,
             CollectionError::CpuWindowsApi { code } => Self::CpuWindowsApi { win32_code: code },
             CollectionError::UnsupportedCpuTopology => Self::UnsupportedCpuTopology,
+            CollectionError::StorageWindowsApi { code } => {
+                Self::StorageWindowsApi { win32_code: code }
+            }
+            CollectionError::InvalidStorage => Self::InvalidStorage,
         }
     }
 }
@@ -52,7 +61,7 @@ async fn collect_on_worker(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use krz_telemetry::{CpuSnapshot, MemorySnapshot};
+    use krz_telemetry::{CpuSnapshot, MemorySnapshot, StorageSnapshot};
     use serde_json::json;
 
     #[test]
@@ -63,6 +72,13 @@ mod tests {
                 assert_ne!(std::thread::current().id(), caller);
                 Ok(SystemSnapshotV1 {
                     schema_version: 1,
+                    storage: Some(StorageSnapshot {
+                        volume: "C:".into(),
+                        total_bytes: 549_755_813_888,
+                        free_bytes: 137_438_953_472,
+                        used_bytes: 412_316_860_416,
+                        free_percent: 25.0,
+                    }),
                     cpu: Some(CpuSnapshot {
                         model: "Test CPU".into(),
                         logical_core_count: 16,
@@ -82,7 +98,7 @@ mod tests {
             .await
             .unwrap();
             let fixture: serde_json::Value = serde_json::from_str(include_str!(
-                "../../contracts/fixtures/cpu-memory-snapshot.json"
+                "../../contracts/fixtures/system-snapshot.json"
             ))
             .unwrap();
             assert_eq!(serde_json::to_value(snapshot).unwrap(), fixture);
@@ -92,6 +108,14 @@ mod tests {
     #[test]
     fn collection_failures_have_stable_structured_payloads() {
         for (error, expected) in [
+            (
+                CollectionError::StorageWindowsApi { code: 5 },
+                json!({ "code": "STORAGE_WINDOWS_API", "win32Code": 5 }),
+            ),
+            (
+                CollectionError::InvalidStorage,
+                json!({ "code": "INVALID_STORAGE" }),
+            ),
             (
                 CollectionError::UnsupportedPlatform,
                 json!({ "code": "UNSUPPORTED_PLATFORM" }),

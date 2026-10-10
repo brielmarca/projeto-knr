@@ -1,6 +1,6 @@
 # System snapshot v1
 
-`system-snapshot.ts` defines the transport-independent CPU and memory snapshot shared
+`system-snapshot.ts` defines the transport-independent CPU, memory, and storage snapshot shared
 with the Rust collector in `native/`. The frontend imports this local package
 to validate IPC responses. Root `npm ci` builds its runtime JavaScript and types
 through the `prepare` script; after editing the schema, rebuild with
@@ -18,6 +18,21 @@ through the `prepare` script; after editing the schema, rebuild with
   not greater than logical), `usagePercent` (finite, 0–100, unrounded), and
   `sampleDurationMs` (positive safe integer, actual elapsed sampling time).
   CPU usage is an interval average, not a live or instantaneous measurement.
+- `storage`: optional for older v1 producers; missing or `null` means unavailable.
+  Contains `volume` (uppercase drive letter plus colon, e.g. `C:`), `totalBytes`,
+  `freeBytes`, `usedBytes`, and `freePercent`. Byte counts are nonnegative safe
+  integers; total must be positive, free cannot exceed total, and used must equal
+  total minus free. Free percentage equals `(freeBytes / totalBytes) * 100`
+  without display rounding. Zero free bytes is a valid full-drive measurement.
+  These are the system drive's capacity and free space available to the current
+  Windows user, including disk quota limits; they are not physical disk size,
+  storage health, or activity measurements. The meter represents free space.
+
+Storage drive selection follows the Windows installation directory, including
+non-`C:` installations. Consumers must use the reported `volume`. A diagnostic
+whose evidence contract specifically requires `C:` cannot use a different
+installation drive as equivalent evidence. The current desktop path only
+displays telemetry; diagnostics and recommendations remain unevaluated.
 
 Unknown keys, inconsistent values and unsupported versions are rejected, not
 normalized. Measured zero is distinct from unavailable data. Native collection

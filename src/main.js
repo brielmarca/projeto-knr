@@ -13,7 +13,8 @@ const desktop = isTauri();
 if (desktop) {
   state.memoryTelemetry = {
     status: "loading",
-    message: "Reading physical memory and sampling CPU usage…",
+    message:
+      "Reading physical memory and system-drive storage, and sampling CPU usage…",
   };
 } else if (import.meta.env.DEV) {
   state = (await import("./data/mock.js")).mockState;

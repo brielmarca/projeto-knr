@@ -1,6 +1,6 @@
-/** @typedef {{label: string, name: string, value: string, detail: string, percent: number | null}} HardwareMetric */
+/** @typedef {{label: string, name: string, value: string, detail: string, percent: number | null, percentKind?: 'free'}} HardwareMetric */
 /** @typedef {{status: 'loading' | 'ready' | 'unavailable' | 'error', message: string, collectedAt?: string}} MemoryTelemetry */
-/** @typedef {{source: 'unavailable' | 'mock' | 'native', memoryTelemetry?: MemoryTelemetry, cpu?: import('@krz/contracts').CpuSnapshot, hardware: HardwareMetric[], impacts: string[], audit: string, findings: string, restore: string, results: string[]}} DashboardState */
+/** @typedef {{source: 'unavailable' | 'mock' | 'native', memoryTelemetry?: MemoryTelemetry, cpu?: import('@krz/contracts').CpuSnapshot, storage?: import('@krz/contracts').StorageSnapshot, hardware: HardwareMetric[], impacts: string[], audit: string, findings: string, restore: string, results: string[]}} DashboardState */
 
 /** No inferred health, measurements, or restore guarantees without telemetry. @returns {DashboardState} */
 export function unavailableState() {
@@ -34,6 +34,19 @@ export function memorySnapshotState(snapshot) {
   const state = unavailableState();
   const memory = snapshot.memory;
   const cpu = snapshot.cpu;
+  const storage = snapshot.storage;
+  if (storage) {
+    state.source = "native";
+    state.storage = storage;
+    state.hardware[3] = {
+      label: "Storage",
+      name: `System drive ${storage.volume}`,
+      value: `${Number(storage.freePercent.toFixed(1))}% free`,
+      detail: `${(storage.freeBytes / 1024 ** 3).toFixed(1)} / ${(storage.totalBytes / 1024 ** 3).toFixed(1)} GiB`,
+      percent: storage.freePercent,
+      percentKind: "free",
+    };
+  }
   if (cpu) {
     state.source = "native";
     state.cpu = cpu;
@@ -72,7 +85,8 @@ export function memorySnapshotState(snapshot) {
 /** @param {DashboardState} state */
 export function telemetryLabel(state) {
   if (state.source === "mock") return "Development preview · Mock data";
-  if (state.cpu) return `Native snapshot · ${connectionLabel(state)}`;
+  if (state.source === "native")
+    return `Native snapshot · ${connectionLabel(state)}`;
   if (!state.memoryTelemetry) return "Windows telemetry · Not connected";
   return {
     loading: "System snapshot · Loading",
@@ -84,9 +98,13 @@ export function telemetryLabel(state) {
 
 /** @param {DashboardState} state */
 export function connectionLabel(state) {
-  if (state.cpu)
-    return state.memoryTelemetry?.status === "ready"
-      ? "CPU + Memory"
-      : "CPU only";
-  return state.source === "native" ? "Memory only" : "Not connected";
+  const collected = [
+    state.cpu && "CPU",
+    state.memoryTelemetry?.status === "ready" && "Memory",
+    state.storage && "Storage",
+  ].filter(Boolean);
+  if (collected.length === 0) return "Not connected";
+  return collected.length === 1
+    ? `${collected[0]} only`
+    : collected.join(" + ");
 }

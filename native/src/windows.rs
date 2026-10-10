@@ -1,12 +1,52 @@
 use crate::{cpu_usage, CollectionError, CpuSnapshot};
 use std::time::{Duration, Instant};
 use windows_sys::Win32::Foundation::{GetLastError, FILETIME};
+use windows_sys::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
 use windows_sys::Win32::System::Registry::{RegGetValueW, HKEY_LOCAL_MACHINE, RRF_RT_REG_SZ};
 use windows_sys::Win32::System::SystemInformation::{
-    GetLogicalProcessorInformation, GlobalMemoryStatusEx, RelationProcessorCore, MEMORYSTATUSEX,
-    SYSTEM_LOGICAL_PROCESSOR_INFORMATION,
+    GetLogicalProcessorInformation, GetSystemWindowsDirectoryW, GlobalMemoryStatusEx,
+    RelationProcessorCore, MEMORYSTATUSEX, SYSTEM_LOGICAL_PROCESSOR_INFORMATION,
 };
 use windows_sys::Win32::System::Threading::{GetActiveProcessorGroupCount, GetSystemTimes};
+
+pub(super) fn system_drive_storage() -> Result<crate::StorageSnapshot, CollectionError> {
+    // Bounded UTF-16 output buffer; no environment variables or user-supplied paths.
+    let mut directory = vec![0_u16; 32768];
+    // SAFETY: initialized writable storage with capacity supplied in UTF-16 units.
+    // Windows does not retain this pointer.
+    let length =
+        unsafe { GetSystemWindowsDirectoryW(directory.as_mut_ptr(), directory.len() as u32) };
+    if length == 0 {
+        return Err(CollectionError::StorageWindowsApi {
+            code: unsafe { GetLastError() },
+        });
+    }
+    if length as usize >= directory.len() || directory[length as usize] != 0 {
+        return Err(CollectionError::InvalidStorage);
+    }
+    let volume = crate::storage::system_drive_volume(&directory[..length as usize])?;
+    let root: Vec<u16> = format!("{volume}\\\0").encode_utf16().collect();
+    let mut total_bytes = 0;
+    let mut free_bytes = 0;
+    // SAFETY: root is an absolute NUL-terminated drive root; outputs are writable
+    // u64s that live through the call. The unused volume-wide free output is null.
+    // Pair caller-available free space with caller-available total capacity so
+    // quotas cannot produce freeBytes > totalBytes or misleading derived usage.
+    if unsafe {
+        GetDiskFreeSpaceExW(
+            root.as_ptr(),
+            &mut free_bytes,
+            &mut total_bytes,
+            std::ptr::null_mut(),
+        )
+    } == 0
+    {
+        return Err(CollectionError::StorageWindowsApi {
+            code: unsafe { GetLastError() },
+        });
+    }
+    crate::StorageSnapshot::from_measurement(volume, total_bytes, free_bytes)
+}
 
 pub(super) fn cpu() -> Result<CpuSnapshot, CollectionError> {
     // GetSystemTimes only covers the calling thread's group on multi-group hosts.

@@ -34,6 +34,84 @@ async function stubIpc(
 }
 
 for (const url of ["/", "http://127.0.0.1:4173/code.html"]) {
+  for (const vramBytes of [null, 12884901888]) {
+    test(`Single GPU capacity remains readable at 1280px (${vramBytes}): ${url}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: 1280, height: 720 });
+      await stubIpc(page, {
+        response: {
+          ...snapshot,
+          gpus: [
+            {
+              name: "Long adapter name ".repeat(7),
+              manufacturer: null,
+              vramBytes,
+            },
+          ],
+        },
+      });
+      await page.goto(url);
+      const gpu = page.getByRole("article", {
+        name: "GPU snapshot",
+        exact: true,
+      });
+      await expect(gpu).toContainText(
+        vramBytes === null ? "VRAM unavailable" : "12.0 GiB VRAM",
+      );
+      await expect(gpu.getByRole("meter")).toHaveCount(0);
+      expect(
+        await gpu.evaluate((card) => card.scrollWidth <= card.clientWidth),
+      ).toBe(true);
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= window.innerWidth,
+        ),
+      ).toBe(true);
+    });
+  }
+  test(`GPU identities and nullable VRAM render without usage claims: ${url}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    const response = JSON.parse(
+      readFileSync(
+        new URL("../../contracts/fixtures/gpu-snapshot.json", import.meta.url),
+        "utf8",
+      ),
+    );
+    response.gpus[1].name = "Integrated <GPU>";
+    await stubIpc(page, { response });
+    await page.goto(url);
+    const gpu = page.getByRole("article", {
+      name: "GPU snapshot",
+      exact: true,
+    });
+    await expect(gpu).toContainText("2 hardware adapters");
+    await expect(gpu.getByRole("meter")).toHaveCount(0);
+    await expect(page.locator("#telemetry-status")).toHaveText(
+      "Native snapshot · GPU only",
+    );
+    await page
+      .getByRole("button", { name: "View system connection status" })
+      .click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toContainText(
+      "Test GPU · Manufacturer: NVIDIA · Dedicated VRAM: 12.0 GiB",
+    );
+    await expect(dialog).toContainText(
+      "Integrated <GPU> · Manufacturer: Intel · Dedicated VRAM: Unavailable",
+    );
+    await expect(dialog).toContainText("not usage or shared system memory");
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+    await page.getByRole("button", { name: "Close dialog" }).click();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+  });
+
   test(`System-drive free space renders through startup IPC: ${url}`, async ({
     page,
   }) => {
@@ -234,6 +312,12 @@ test("connection dialog opened during collection updates without moving focus", 
 });
 
 for (const [name, options, status, message] of [
+  [
+    "GPU collection failure",
+    { error: { code: "GPU_API", hresult: -1 } },
+    "Error",
+    "Windows could not read GPU information.",
+  ],
   [
     "storage collection failure",
     { error: { code: "STORAGE_WINDOWS_API", win32Code: 5 } },

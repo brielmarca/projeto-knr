@@ -22,12 +22,18 @@ pub enum SnapshotError {
         win32_code: u32,
     },
     InvalidStorage,
+    GpuApi {
+        hresult: i32,
+    },
+    InvalidGpu,
     CollectionTaskFailed,
 }
 
 impl From<CollectionError> for SnapshotError {
     fn from(error: CollectionError) -> Self {
         match error {
+            CollectionError::GpuApi { code } => Self::GpuApi { hresult: code },
+            CollectionError::InvalidGpu => Self::InvalidGpu,
             CollectionError::UnsupportedPlatform => Self::UnsupportedPlatform,
             CollectionError::WindowsApi { code } => Self::WindowsApi { win32_code: code },
             CollectionError::InvalidMemory => Self::InvalidMemory,
@@ -72,6 +78,7 @@ mod tests {
                 assert_ne!(std::thread::current().id(), caller);
                 Ok(SystemSnapshotV1 {
                     schema_version: 1,
+                    gpus: None,
                     storage: Some(StorageSnapshot {
                         volume: "C:".into(),
                         total_bytes: 549_755_813_888,
@@ -106,8 +113,44 @@ mod tests {
     }
 
     #[test]
+    fn worker_preserves_multiple_gpus_and_unknown_vram() {
+        let snapshot = SystemSnapshotV1 {
+            schema_version: 1,
+            collected_at: "2026-10-07T12:00:00.000Z".into(),
+            memory: None,
+            cpu: None,
+            storage: None,
+            gpus: Some(vec![
+                krz_telemetry::GpuSnapshot {
+                    name: "Test GPU".into(),
+                    manufacturer: Some("NVIDIA".into()),
+                    vram_bytes: Some(12_884_901_888),
+                },
+                krz_telemetry::GpuSnapshot {
+                    name: "Integrated GPU".into(),
+                    manufacturer: Some("Intel".into()),
+                    vram_bytes: None,
+                },
+            ]),
+        };
+        let result = tauri::async_runtime::block_on(collect_on_worker(|| Ok(snapshot))).unwrap();
+        let fixture: serde_json::Value =
+            serde_json::from_str(include_str!("../../contracts/fixtures/gpu-snapshot.json"))
+                .unwrap();
+        assert_eq!(serde_json::to_value(result).unwrap(), fixture);
+    }
+
+    #[test]
     fn collection_failures_have_stable_structured_payloads() {
         for (error, expected) in [
+            (
+                CollectionError::GpuApi { code: -1 },
+                json!({ "code": "GPU_API", "hresult": -1 }),
+            ),
+            (
+                CollectionError::InvalidGpu,
+                json!({ "code": "INVALID_GPU" }),
+            ),
             (
                 CollectionError::StorageWindowsApi { code: 5 },
                 json!({ "code": "STORAGE_WINDOWS_API", "win32Code": 5 }),

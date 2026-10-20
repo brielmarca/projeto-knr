@@ -2,8 +2,13 @@ import { escapeHtml as e } from "../ui.js";
 
 /** @param {import('../data/state.js').HardwareMetric} metric @param {boolean} mock */
 export function hardwareMetric(metric, mock) {
-  const measured = !mock && metric.percent !== null;
-  const measurement = metric.percentKind === "free" ? "free space" : "usage";
+  const measured =
+    !mock && (metric.percent !== null || metric.collected === true);
+  const measurement = metric.collected
+    ? "adapter information"
+    : metric.percentKind === "free"
+      ? "free space"
+      : "usage";
   const parts = metric.value.match(/^([\d.]+)(.*)$/);
   const value = parts
     ? `${e(parts[1])}<small>${e(parts[2])}</small>`

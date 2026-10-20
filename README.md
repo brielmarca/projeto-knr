@@ -183,6 +183,13 @@ The existing Vite frontend is packaged as a Tauri 2 desktop application. At star
 
 Root `npm ci` also builds the local `@krz/contracts` package via `prepare`. After changing the shared schema, run `npm run build --prefix contracts` before developing the frontend.
 
+The native snapshot also includes read-only DXGI GPU information for multiple
+hardware adapters. The existing GPU card summarizes them; the system connection
+dialog lists each name, manufacturer, and dedicated VRAM capacity. Unknown VRAM
+or vendor remains unavailable. Shared RAM is never counted as VRAM, and GPU usage
+and health are not inferred. See `native/README.md` for collection limits and
+`contracts/README.md` for nullable GPU fields.
+
 ```sh
 npm run desktop:dev    # starts Vite and opens a native desktop window
 npm run desktop:build  # builds an NSIS installer (Windows)

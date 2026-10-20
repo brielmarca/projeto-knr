@@ -58,6 +58,26 @@ export const cpuSchema = z
     message: "Physical core count must not exceed logical core count",
   });
 
+/** Hardware adapter identity and dedicated VRAM capacity, never shared memory or usage. */
+export const gpuSchema = z
+  .object({
+    name: z
+      .string()
+      .min(1)
+      .max(128)
+      .regex(/^[^\u0000-\u001f\u007f]+$/)
+      .refine((value) => value.trim().length > 0),
+    manufacturer: z
+      .string()
+      .min(1)
+      .max(128)
+      .regex(/^[^\u0000-\u001f\u007f]+$/)
+      .refine((value) => value.trim().length > 0)
+      .nullable(),
+    vramBytes: bytes.positive().nullable(),
+  })
+  .strict();
+
 /** System-drive capacity available to the current user (Windows quotas apply). */
 export const storageSchema = z
   .object({
@@ -112,10 +132,13 @@ export const systemSnapshotSchema = z
     cpu: cpuSchema.nullable().optional(),
     // Missing or null means unavailable, including older v1 producers.
     storage: storageSchema.nullable().optional(),
+    // Missing/null: unavailable; []: enumeration succeeded with no hardware adapters.
+    gpus: z.array(gpuSchema).max(32).nullable().optional(),
   })
   .strict();
 
 export type MemorySnapshot = z.infer<typeof memorySchema>;
 export type CpuSnapshot = z.infer<typeof cpuSchema>;
 export type StorageSnapshot = z.infer<typeof storageSchema>;
+export type GpuSnapshot = z.infer<typeof gpuSchema>;
 export type SystemSnapshotV1 = z.infer<typeof systemSnapshotSchema>;

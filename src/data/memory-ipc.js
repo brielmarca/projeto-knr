@@ -38,6 +38,8 @@ export async function collectMemoryState({
       INVALID_MEMORY:
         "The native collector returned invalid memory measurements.",
       INVALID_CPU: "The native collector returned invalid CPU measurements.",
+      GPU_API: "Windows could not read GPU information.",
+      INVALID_GPU: "The native collector returned invalid GPU information.",
       STORAGE_WINDOWS_API: "Windows could not read system-drive storage.",
       INVALID_STORAGE:
         "The native collector returned invalid system-drive measurements.",

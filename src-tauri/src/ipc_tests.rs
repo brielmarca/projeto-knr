@@ -52,7 +52,14 @@ fn real_handler_and_capability_allow_only_local_main_window() {
         assert_eq!(storage["usedBytes"].as_u64().unwrap(), total - free);
         assert!((0.0..=100.0).contains(&storage["freePercent"].as_f64().unwrap()));
         assert_eq!(storage["volume"].as_str().unwrap().len(), 2);
-        assert_eq!(snapshot.as_object().unwrap().len(), 5);
+        let gpus = snapshot["gpus"].as_array().unwrap();
+        assert!(gpus.len() <= 32);
+        for gpu in gpus {
+            assert!(!gpu["name"].as_str().unwrap().is_empty());
+            assert!(gpu["manufacturer"].is_null() || gpu["manufacturer"].is_string());
+            assert!(gpu["vramBytes"].is_null() || gpu["vramBytes"].as_u64().unwrap() > 0);
+        }
+        assert_eq!(snapshot.as_object().unwrap().len(), 6);
     } else {
         assert_eq!(result, Err(json!({ "code": "UNSUPPORTED_PLATFORM" })));
     }

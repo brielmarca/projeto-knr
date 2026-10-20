@@ -1,6 +1,6 @@
 # System snapshot v1
 
-`system-snapshot.ts` defines the transport-independent CPU, memory, and storage snapshot shared
+`system-snapshot.ts` defines the transport-independent CPU, GPU, memory, and storage snapshot shared
 with the Rust collector in `native/`. The frontend imports this local package
 to validate IPC responses. Root `npm ci` builds its runtime JavaScript and types
 through the `prepare` script; after editing the schema, rebuild with
@@ -27,6 +27,16 @@ through the `prepare` script; after editing the schema, rebuild with
   These are the system drive's capacity and free space available to the current
   Windows user, including disk quota limits; they are not physical disk size,
   storage health, or activity measurements. The meter represents free space.
+
+- `gpus`: optional for older v1 producers; missing or `null` means unavailable.
+  An array of up to 32 hardware adapters; `[]` means enumeration succeeded with
+  no hardware adapters reported. Each entry contains `name` (nonblank, 1–128 UTF-16 units,
+  no ASCII control characters), `manufacturer` (same string limits or `null`
+  for an unknown vendor), and `vramBytes` (positive safe integer or `null`).
+  VRAM means DXGI-reported dedicated video-memory capacity, never shared system
+  memory, available memory, utilization, or health. Zero/unsafe DXGI capacities
+  become `null`; no capacity is inferred. Adapter ordering does not identify a
+  preferred GPU, and capacities must not be summed as a usable memory pool.
 
 Storage drive selection follows the Windows installation directory, including
 non-`C:` installations. Consumers must use the reported `volume`. A diagnostic

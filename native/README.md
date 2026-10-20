@@ -1,4 +1,4 @@
-# Native CPU, memory, and system-drive collector
+# Native CPU, GPU, memory, and system-drive collector
 
 Standalone Rust library; entry point: `krz_telemetry::collect_system_snapshot()`.
 On Windows, it reads total and available physical memory using
@@ -28,9 +28,24 @@ This first implementation supports a single Windows processor group. Multi-group
 hosts return `UnsupportedCpuTopology`, because `GetSystemTimes` only measures the
 calling thread's group there. It never presents partial-group usage as system usage.
 
+GPU collection uses DXGI `CreateDXGIFactory1`, `EnumAdapters1`, and `GetDesc1`.
+Software adapters are excluded; all enumerated hardware adapters are retained,
+including integrated and discrete GPUs. Enumeration is bounded to 32 adapters
+(including software entries), with excess entries rejected rather than truncated.
+Names come from the driver description. Known PCI vendor IDs map to NVIDIA, AMD,
+Intel, Microsoft, or Qualcomm; unknown manufacturers remain `null`.
+`DedicatedVideoMemory` is read at pointer width, so capacities above 4 GiB are
+preserved on supported Windows x64 builds. Zero or unsafe capacities become
+`vramBytes: null`; shared/system memory is never substituted. This is reported
+dedicated capacity, not utilization, free VRAM, or GPU health. No D3D device,
+shell, elevation, or process enumeration is used. COM interfaces are released
+through the typed `windows` bindings (the version already used by Tauri).
+The native crate requires Rust 1.82+ for those bindings; use stable for desktop builds.
+
 Errors are explicit: `UnsupportedPlatform`, `WindowsApi { code }`, `InvalidMemory`,
 `CpuWindowsApi { code }`, `InvalidCpu`, `UnsupportedCpuTopology`,
-`StorageWindowsApi { code }`, or `InvalidStorage`. Any collection
+`StorageWindowsApi { code }`, `InvalidStorage`, `GpuApi { code }` (HRESULT),
+or `InvalidGpu`. Any collection
 failure rejects the whole snapshot, including memory. Non-Windows builds return
 `UnsupportedPlatform`; all Windows API code and dependencies are cfg-gated.
 

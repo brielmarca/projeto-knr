@@ -1,6 +1,6 @@
-/** @typedef {{label: string, name: string, value: string, detail: string, percent: number | null, percentKind?: 'free'}} HardwareMetric */
+/** @typedef {{label: string, name: string, value: string, detail: string, percent: number | null, percentKind?: 'free', collected?: boolean}} HardwareMetric */
 /** @typedef {{status: 'loading' | 'ready' | 'unavailable' | 'error', message: string, collectedAt?: string}} MemoryTelemetry */
-/** @typedef {{source: 'unavailable' | 'mock' | 'native', memoryTelemetry?: MemoryTelemetry, cpu?: import('@krz/contracts').CpuSnapshot, storage?: import('@krz/contracts').StorageSnapshot, hardware: HardwareMetric[], impacts: string[], audit: string, findings: string, restore: string, results: string[]}} DashboardState */
+/** @typedef {{source: 'unavailable' | 'mock' | 'native', memoryTelemetry?: MemoryTelemetry, cpu?: import('@krz/contracts').CpuSnapshot, storage?: import('@krz/contracts').StorageSnapshot, gpus?: import('@krz/contracts').GpuSnapshot[], hardware: HardwareMetric[], impacts: string[], audit: string, findings: string, restore: string, results: string[]}} DashboardState */
 
 /** No inferred health, measurements, or restore guarantees without telemetry. @returns {DashboardState} */
 export function unavailableState() {
@@ -35,6 +35,34 @@ export function memorySnapshotState(snapshot) {
   const memory = snapshot.memory;
   const cpu = snapshot.cpu;
   const storage = snapshot.storage;
+  if (snapshot.gpus) {
+    state.source = "native";
+    state.gpus = snapshot.gpus;
+    const first = snapshot.gpus[0];
+    state.hardware[1] = {
+      label: "GPU",
+      name: first
+        ? snapshot.gpus.length === 1
+          ? first.name
+          : `${snapshot.gpus.length} hardware adapters`
+        : "No hardware adapters reported",
+      value:
+        snapshot.gpus.length === 1 && first?.vramBytes != null
+          ? `${(first.vramBytes / 1024 ** 3).toFixed(1)} GiB VRAM`
+          : "—",
+      detail:
+        snapshot.gpus.length > 1
+          ? "Details in system connection"
+          : first
+            ? "Dedicated VRAM capacity"
+            : "Enumeration complete",
+      percent: null,
+      collected: true,
+    };
+    if (first && snapshot.gpus.length === 1 && first.vramBytes === null) {
+      state.hardware[1].detail = "VRAM unavailable";
+    }
+  }
   if (storage) {
     state.source = "native";
     state.storage = storage;
@@ -100,6 +128,7 @@ export function telemetryLabel(state) {
 export function connectionLabel(state) {
   const collected = [
     state.cpu && "CPU",
+    state.gpus && "GPU",
     state.memoryTelemetry?.status === "ready" && "Memory",
     state.storage && "Storage",
   ].filter(Boolean);

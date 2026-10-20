@@ -59,7 +59,15 @@ fn real_handler_and_capability_allow_only_local_main_window() {
             assert!(gpu["manufacturer"].is_null() || gpu["manufacturer"].is_string());
             assert!(gpu["vramBytes"].is_null() || gpu["vramBytes"].as_u64().unwrap() > 0);
         }
-        assert_eq!(snapshot.as_object().unwrap().len(), 6);
+        let processes = snapshot["processes"].as_array().unwrap();
+        assert!(processes.len() <= 128);
+        for process in processes {
+            assert!(process["pid"].as_u64().unwrap() > 0);
+            assert!(!process["name"].as_str().unwrap().is_empty());
+            assert!(process["workingSetBytes"].as_u64().is_some());
+            assert_eq!(process.as_object().unwrap().len(), 3);
+        }
+        assert_eq!(snapshot.as_object().unwrap().len(), 7);
     } else {
         assert_eq!(result, Err(json!({ "code": "UNSUPPORTED_PLATFORM" })));
     }

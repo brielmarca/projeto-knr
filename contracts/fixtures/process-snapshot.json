@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "collectedAt": "2026-10-07T12:00:00.000Z",
+  "memory": null,
+  "processes": [
+    { "pid": 12, "name": "large.exe", "workingSetBytes": 5368709120 },
+    { "pid": 4, "name": "test.exe", "workingSetBytes": 1024 },
+    { "pid": 8, "name": "test.exe", "workingSetBytes": 1024 },
+    { "pid": 16, "name": "idle.exe", "workingSetBytes": 0 }
+  ]
+}

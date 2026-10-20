@@ -38,6 +38,18 @@ through the `prepare` script; after editing the schema, rebuild with
   become `null`; no capacity is inferred. Adapter ordering does not identify a
   preferred GPU, and capacities must not be summed as a usable memory pool.
 
+- `processes`: optional for older v1 producers; missing or `null` means unavailable.
+  At most 128 readable processes, sorted by `workingSetBytes` descending, then
+  `pid` ascending. PIDs are unique positive uint32 values. `name` is the executable
+  basename (1–260 UTF-16 units, nonblank, no ASCII controls or path separators).
+  `workingSetBytes` is a nonnegative safe integer, including shared resident pages;
+  it is not private memory or an estimate of reclaimable memory. Do not sum working
+  sets as system usage. Zero is valid. Protected/exiting or invalid entries are
+  skipped; `[]` means enumeration succeeded with no readable entries, not that
+  Windows has no processes. The list is best-effort, capped, and collected once,
+  not an exhaustive inventory or an atomic/live sample. Enumeration failure rejects
+  the snapshot. The frontend retains the list in state without adding process actions.
+
 Storage drive selection follows the Windows installation directory, including
 non-`C:` installations. Consumers must use the reported `volume`. A diagnostic
 whose evidence contract specifically requires `C:` cannot use a different

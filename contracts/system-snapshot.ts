@@ -117,6 +117,47 @@ export const storageSchema = z
     }
   });
 
+export const MAX_PROCESSES = 128;
+
+/** Resident working set, including shared pages; not private bytes or reclaimable memory. */
+export const processSchema = z
+  .object({
+    pid: z.number().int().positive().max(0xffffffff),
+    name: z
+      .string()
+      .min(1)
+      .max(260)
+      .regex(/^[^\u0000-\u001f\u007f\\/]+$/)
+      .refine((value) => value.trim().length > 0),
+    workingSetBytes: bytes,
+  })
+  .strict();
+
+export const processesSchema = z
+  .array(processSchema)
+  .max(MAX_PROCESSES)
+  .superRefine((processes, context) => {
+    const seen = new Set<number>();
+    for (const [index, process] of processes.entries()) {
+      const previous = processes[index - 1];
+      if (
+        seen.has(process.pid) ||
+        (previous &&
+          (previous.workingSetBytes < process.workingSetBytes ||
+            (previous.workingSetBytes === process.workingSetBytes &&
+              previous.pid >= process.pid)))
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: [index],
+          message:
+            "Processes require unique PIDs and working-set descending, PID ascending order",
+        });
+      }
+      seen.add(process.pid);
+    }
+  });
+
 /**
  * Transport-independent system snapshot v1.
  * collectedAt is an ISO UTC timestamp. Required null means unavailable;
@@ -134,6 +175,8 @@ export const systemSnapshotSchema = z
     storage: storageSchema.nullable().optional(),
     // Missing/null: unavailable; []: enumeration succeeded with no hardware adapters.
     gpus: z.array(gpuSchema).max(32).nullable().optional(),
+    // Missing/null: unavailable; []: enumeration succeeded, no readable entries.
+    processes: processesSchema.nullable().optional(),
   })
   .strict();
 
@@ -141,4 +184,5 @@ export type MemorySnapshot = z.infer<typeof memorySchema>;
 export type CpuSnapshot = z.infer<typeof cpuSchema>;
 export type StorageSnapshot = z.infer<typeof storageSchema>;
 export type GpuSnapshot = z.infer<typeof gpuSchema>;
+export type ProcessSnapshot = z.infer<typeof processSchema>;
 export type SystemSnapshotV1 = z.infer<typeof systemSnapshotSchema>;

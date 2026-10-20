@@ -16,7 +16,7 @@ The Tauri command runs this sampling work on its existing blocking worker.
 
 System-drive storage uses `GetSystemWindowsDirectoryW` to identify the Windows
 installation drive (usually `C:`, but never assumed). Only that drive root is read
-with `GetDiskFreeSpaceExW`; no other drives, files, or processes are enumerated.
+with `GetDiskFreeSpaceExW`; no other drives or files are enumerated by this query.
 The snapshot includes the uppercase drive letter in `volume`, total/free/used
 bytes, and unrounded free percentage. Total bytes and free bytes both use the
 current user's quota-aware values; used bytes are total minus free. This avoids
@@ -42,10 +42,22 @@ shell, elevation, or process enumeration is used. COM interfaces are released
 through the typed `windows` bindings (the version already used by Tauri).
 The native crate requires Rust 1.82+ for those bindings; use stable for desktop builds.
 
+Process memory uses `K32EnumProcesses` with a fixed 65,536-PID buffer. A full
+buffer is rejected rather than silently treating a truncated enumeration as complete.
+Each process is opened with only `PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ`,
+without inheritance, elevation, or debug privileges. `QueryFullProcessImageNameW`
+and `K32GetProcessMemoryInfo` use the same owned handle; only the basename, PID,
+and working-set bytes cross IPC. Handles are closed on every path. Protected,
+exiting, or invalid per-process reads are skipped. The largest 128 readable
+working sets are retained with PID ascending as a deterministic tie-breaker.
+Working sets include shared pages and are not reclaimable-memory estimates.
+Enumeration errors reject the snapshot; an empty successful list means no readable
+entries. Windows-only tests exercise the current process and real enumeration.
+
 Errors are explicit: `UnsupportedPlatform`, `WindowsApi { code }`, `InvalidMemory`,
 `CpuWindowsApi { code }`, `InvalidCpu`, `UnsupportedCpuTopology`,
 `StorageWindowsApi { code }`, `InvalidStorage`, `GpuApi { code }` (HRESULT),
-or `InvalidGpu`. Any collection
+`InvalidGpu`, `ProcessWindowsApi { code }`, or `InvalidProcesses`. Any collection
 failure rejects the whole snapshot, including memory. Non-Windows builds return
 `UnsupportedPlatform`; all Windows API code and dependencies are cfg-gated.
 

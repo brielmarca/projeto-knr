@@ -8,6 +8,8 @@ mod storage;
 pub use storage::StorageSnapshot;
 mod gpu;
 pub use gpu::GpuSnapshot;
+mod processes;
+pub use processes::ProcessSnapshot;
 
 #[cfg(target_os = "windows")]
 mod windows;
@@ -45,6 +47,8 @@ pub struct SystemSnapshotV1 {
     pub storage: Option<StorageSnapshot>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub gpus: Option<Vec<GpuSnapshot>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub processes: Option<Vec<ProcessSnapshot>>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -59,11 +63,19 @@ pub enum CollectionError {
     InvalidStorage,
     GpuApi { code: i32 },
     InvalidGpu,
+    ProcessWindowsApi { code: u32 },
+    InvalidProcesses,
 }
 
 impl fmt::Display for CollectionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::ProcessWindowsApi { code } => {
+                write!(f, "Process enumeration failed (Win32 error {code})")
+            }
+            Self::InvalidProcesses => {
+                f.write_str("Process enumeration exceeded its bounded buffer")
+            }
             Self::GpuApi { code } => write!(f, "GPU collection failed (HRESULT {code})"),
             Self::InvalidGpu => f.write_str("GPU values violate the snapshot contract"),
             Self::StorageWindowsApi { code } => {
@@ -100,6 +112,7 @@ pub fn collect_system_snapshot() -> Result<SystemSnapshotV1, CollectionError> {
         snapshot.cpu = Some(windows::cpu()?);
         snapshot.storage = Some(windows::system_drive_storage()?);
         snapshot.gpus = Some(gpu::collect()?);
+        snapshot.processes = Some(processes::collect()?);
     }
     snapshot.collected_at = Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true);
     Ok(snapshot)
@@ -129,6 +142,7 @@ fn snapshot_from_memory(
         cpu: None,
         storage: None,
         gpus: None,
+        processes: None,
         collected_at: collected_at.to_rfc3339_opts(SecondsFormat::Millis, true),
         memory: Some(MemorySnapshot {
             total_bytes,

@@ -1,6 +1,6 @@
 /** @typedef {{label: string, name: string, value: string, detail: string, percent: number | null, percentKind?: 'free', collected?: boolean}} HardwareMetric */
 /** @typedef {{status: 'loading' | 'ready' | 'unavailable' | 'error', message: string, collectedAt?: string}} MemoryTelemetry */
-/** @typedef {{source: 'unavailable' | 'mock' | 'native', memoryTelemetry?: MemoryTelemetry, cpu?: import('@krz/contracts').CpuSnapshot, storage?: import('@krz/contracts').StorageSnapshot, gpus?: import('@krz/contracts').GpuSnapshot[], hardware: HardwareMetric[], impacts: string[], audit: string, findings: string, restore: string, results: string[]}} DashboardState */
+/** @typedef {{source: 'unavailable' | 'mock' | 'native', memoryTelemetry?: MemoryTelemetry, cpu?: import('@krz/contracts').CpuSnapshot, storage?: import('@krz/contracts').StorageSnapshot, gpus?: import('@krz/contracts').GpuSnapshot[], processes?: import('@krz/contracts').ProcessSnapshot[], hardware: HardwareMetric[], impacts: string[], audit: string, findings: string, restore: string, results: string[]}} DashboardState */
 
 /** No inferred health, measurements, or restore guarantees without telemetry. @returns {DashboardState} */
 export function unavailableState() {
@@ -35,6 +35,10 @@ export function memorySnapshotState(snapshot) {
   const memory = snapshot.memory;
   const cpu = snapshot.cpu;
   const storage = snapshot.storage;
+  if (snapshot.processes) {
+    state.source = "native";
+    state.processes = snapshot.processes;
+  }
   if (snapshot.gpus) {
     state.source = "native";
     state.gpus = snapshot.gpus;
@@ -131,6 +135,7 @@ export function connectionLabel(state) {
     state.gpus && "GPU",
     state.memoryTelemetry?.status === "ready" && "Memory",
     state.storage && "Storage",
+    state.processes && "Processes",
   ].filter(Boolean);
   if (collected.length === 0) return "Not connected";
   return collected.length === 1

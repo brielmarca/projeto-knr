@@ -26,12 +26,21 @@ pub enum SnapshotError {
         hresult: i32,
     },
     InvalidGpu,
+    ProcessWindowsApi {
+        #[serde(rename = "win32Code")]
+        win32_code: u32,
+    },
+    InvalidProcesses,
     CollectionTaskFailed,
 }
 
 impl From<CollectionError> for SnapshotError {
     fn from(error: CollectionError) -> Self {
         match error {
+            CollectionError::ProcessWindowsApi { code } => {
+                Self::ProcessWindowsApi { win32_code: code }
+            }
+            CollectionError::InvalidProcesses => Self::InvalidProcesses,
             CollectionError::GpuApi { code } => Self::GpuApi { hresult: code },
             CollectionError::InvalidGpu => Self::InvalidGpu,
             CollectionError::UnsupportedPlatform => Self::UnsupportedPlatform,
@@ -79,6 +88,7 @@ mod tests {
                 Ok(SystemSnapshotV1 {
                     schema_version: 1,
                     gpus: None,
+                    processes: None,
                     storage: Some(StorageSnapshot {
                         volume: "C:".into(),
                         total_bytes: 549_755_813_888,
@@ -118,6 +128,7 @@ mod tests {
             schema_version: 1,
             collected_at: "2026-10-07T12:00:00.000Z".into(),
             memory: None,
+            processes: None,
             cpu: None,
             storage: None,
             gpus: Some(vec![
@@ -141,8 +152,51 @@ mod tests {
     }
 
     #[test]
+    fn worker_preserves_process_wire_shape() {
+        let snapshot = SystemSnapshotV1 {
+            schema_version: 1,
+            collected_at: "2026-10-07T12:00:00.000Z".into(),
+            memory: None,
+            cpu: None,
+            storage: None,
+            gpus: None,
+            processes: Some(
+                [
+                    (12, "large.exe", 5_368_709_120),
+                    (4, "test.exe", 1024),
+                    (8, "test.exe", 1024),
+                    (16, "idle.exe", 0),
+                ]
+                .into_iter()
+                .map(
+                    |(pid, name, working_set_bytes)| krz_telemetry::ProcessSnapshot {
+                        pid,
+                        name: name.into(),
+                        working_set_bytes,
+                    },
+                )
+                .collect(),
+            ),
+        };
+        let result = tauri::async_runtime::block_on(collect_on_worker(|| Ok(snapshot))).unwrap();
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../contracts/fixtures/process-snapshot.json"
+        ))
+        .unwrap();
+        assert_eq!(serde_json::to_value(result).unwrap(), fixture);
+    }
+
+    #[test]
     fn collection_failures_have_stable_structured_payloads() {
         for (error, expected) in [
+            (
+                CollectionError::ProcessWindowsApi { code: 5 },
+                json!({ "code": "PROCESS_WINDOWS_API", "win32Code": 5 }),
+            ),
+            (
+                CollectionError::InvalidProcesses,
+                json!({ "code": "INVALID_PROCESSES" }),
+            ),
             (
                 CollectionError::GpuApi { code: -1 },
                 json!({ "code": "GPU_API", "hresult": -1 }),

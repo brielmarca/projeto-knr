@@ -118,3 +118,9 @@ test("search escapes input, returns empty state, and dialog is keyboard accessib
   await expect(page.getByRole("dialog")).not.toBeVisible();
   await expect(trigger).toBeFocused();
 });
+
+test("Flavor Boost brand is visible in the dashboard and browser title", async ({ page }) => {
+  await page.goto("/");
+  await expect(page).toHaveTitle("Flavor Boost — System dashboard");
+  await expect(page.getByRole("link", { name: "Flavor Boost home" })).toBeVisible();
+});

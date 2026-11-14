@@ -4,7 +4,7 @@ import { connectionLabel } from "../data/state.js";
 /** @param {import('../data/state.js').DashboardState} state */
 export function topNavigation(state) {
   return `<header class="topbar">
-    <a class="brand" href="#home" aria-label="KRZ Boost home"><span class="brand-mark">${icon("bolt")}</span><strong>KRZ<span class="brand-dot">·</span></strong><span>Boost</span></a>
+    <a class="brand" href="#home" aria-label="Flavor Boost home"><span class="brand-mark">${icon("bolt")}</span><strong>Flavor<span class="brand-dot">·</span></strong><span>Boost</span></a>
     <nav aria-label="Main navigation">
       <a href="#home" aria-current="page">Home</a>
       <a href="#modules">Optimize</a>

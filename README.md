@@ -1,4 +1,4 @@
-<h1 align="center">KRZ Boost</h1>
+<h1 align="center">Flavor Boost</h1>
 
 <p align="center">
   <strong>Dark, accessible Windows performance dashboard — polished frontend and desktop shell, honest about what is not built yet.</strong>
@@ -28,13 +28,15 @@
 
 ## Overview
 
-KRZ Boost is a desktop-first dashboard UI for reviewing Windows performance work: hardware overview, diagnostic baseline, and a grid of optimization modules. This repository contains two working pieces:
+Flavor Boost is a desktop-first dashboard UI for reviewing Windows performance work: hardware overview, diagnostic baseline, and a grid of optimization modules. This repository contains two working pieces:
 
 - **A production frontend** — vanilla JavaScript ES modules, compiled Tailwind 3, built with Vite. `screen.png` and the current product brief are the visual authority; the implementation follows them closely.
 - **A Tauri 2 desktop shell** — the same frontend packaged into a native Windows window and NSIS installer, with a validated read-only CPU, memory, and system-drive snapshot displayed at startup.
 
 Everything is designed around one rule: **missing data stays missing**. CPU, physical memory, and system-drive storage are collected in the Windows desktop app. Other hardware metrics, findings, benchmarks, and restore status remain unavailable/unknown, and applying changes stays disabled.
 
+> **Flavor Boost transition:** The visible product name is being migrated from KRZ Boost. Internal package names, bundle identifier, executable, and GitHub workflow artifact names remain unchanged for compatibility until Windows installer migration is verified. No game-specific tuning, network route optimization, or system-changing boost is implemented yet. See [the gaming plan](docs/GAMING-ROADMAP.md).
+>
 > **Integration status:** `native/` collects CPU, physical memory, and system-drive storage on Windows, and `contracts/` defines the v1 snapshot. CPU includes model, logical/physical core counts, sampled usage, and actual sample duration. Storage includes the Windows installation drive, total/free/used bytes and free percentage, respecting the current user's disk quotas. The first CPU collector supports a single Windows processor group; see [native collection details](native/README.md). There is no Windows Agent, PowerShell or shell execution, API client, backend, PostgreSQL, or optimization/restore-point logic. `backend/` remains a placeholder. `VITE_API_URL` is reserved for a future integration; see `.env.example`.
 
 ---
